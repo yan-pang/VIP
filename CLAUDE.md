@@ -1,4 +1,4 @@
-# VIP Starter 协作入口
+# vip 协作入口
 
 默认直接进入 `guide-agent` 总控模式工作。
 

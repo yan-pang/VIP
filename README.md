@@ -1,8 +1,8 @@
 > **从 template 新建项目?** 先按 [TEMPLATE-SETUP.md](TEMPLATE-SETUP.md) 走完初始化清单,然后删掉那份文件和本行提示。
 
-# VIP Starter
+# vip
 
-`VIP Starter` 是一个中文优先、文档驱动的前端原型长期模板。
+`vip` 是一个中文优先、文档驱动的前端原型长期模板。
 
 ## 这个项目怎么用
 
