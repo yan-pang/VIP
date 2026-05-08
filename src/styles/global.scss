@@ -1,0 +1,119 @@
+html,
+body,
+#root,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+:root {
+  --starter-bg: #f3f7fc;
+  --starter-surface: rgba(255, 255, 255, 0.86);
+  --starter-surface-strong: #ffffff;
+  --starter-border: rgba(35, 100, 170, 0.12);
+  --starter-text: #152033;
+  --starter-muted: #5f6f86;
+  --starter-shadow: 0 20px 60px rgba(26, 57, 96, 0.08);
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(88, 144, 255, 0.14), transparent 35%),
+    radial-gradient(circle at top right, rgba(35, 100, 170, 0.12), transparent 28%),
+    linear-gradient(180deg, #f6f9fd 0%, #eef3f9 100%);
+  color: var(--starter-text);
+}
+
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.page-shell__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.page-shell__title {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+}
+
+.page-shell__description {
+  max-width: 760px;
+  color: var(--starter-muted);
+  font-size: 15px;
+}
+
+.page-shell__description p {
+  margin-bottom: 0;
+}
+
+.page-shell__toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 22px;
+  border: 1px solid var(--starter-border);
+  border-radius: 24px;
+  background: var(--starter-surface);
+  box-shadow: var(--starter-shadow);
+  backdrop-filter: blur(16px);
+}
+
+.page-shell__search {
+  flex: 1;
+}
+
+.page-shell__table {
+  padding: 22px;
+  border: 1px solid var(--starter-border);
+  border-radius: 24px;
+  background: var(--starter-surface-strong);
+  box-shadow: var(--starter-shadow);
+}
+
+.pagination-shell {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 18px;
+}
+
+.catalog-form-row {
+  display: flex;
+  width: 100%;
+}
+
+.catalog-form-row .ant-form-item {
+  flex: 1;
+}
+
+.ant-btn:focus,
+.ant-btn:focus-visible {
+  box-shadow: none;
+}
+
+@media (max-width: 960px) {
+  .page-shell__toolbar {
+    flex-direction: column;
+  }
+
+  .page-shell__search {
+    width: 100%;
+  }
+
+  .catalog-form-row {
+    flex-direction: column;
+  }
+}

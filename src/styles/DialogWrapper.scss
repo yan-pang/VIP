@@ -1,0 +1,23 @@
+.dialog-wrapper .ant-modal-content {
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.dialog-wrapper .ant-modal-header {
+  padding: 18px 22px 14px;
+  background: #f7faff;
+}
+
+.dialog-wrapper .ant-modal-body {
+  padding: 22px;
+}
+
+.dialog-wrapper .ant-modal-footer {
+  padding: 0 22px 22px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}

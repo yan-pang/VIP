@@ -1,0 +1,14 @@
+.catalog-project-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.catalog-project-cell strong {
+  font-size: 14px;
+}
+
+.catalog-project-cell span {
+  color: var(--starter-muted);
+  font-size: 12px;
+}

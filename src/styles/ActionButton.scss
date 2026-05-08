@@ -1,0 +1,9 @@
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.action-button.table-action {
+  justify-content: flex-start;
+}

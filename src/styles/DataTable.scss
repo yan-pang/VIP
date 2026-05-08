@@ -1,0 +1,24 @@
+.data-table .ant-table-wrapper {
+  border: 1px solid rgba(21, 32, 51, 0.06);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.data-table .ant-table {
+  font-size: 14px;
+}
+
+.data-table .ant-table-thead > tr > th {
+  background: #f7faff;
+  color: #415168;
+  font-weight: 600;
+}
+
+.data-table .ant-table-tbody > tr > td {
+  color: #223146;
+}
+
+.table-action-buttons {
+  display: flex;
+  align-items: center;
+}

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm run lint)",
+      "Bash(npm run check)",
+      "Bash(npm run new:domain -- *)",
+      "Bash(git status *)",
+      "Bash(git branch *)",
+      "Bash(git tag *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git describe *)",
+      "Bash(git show *)",
+      "Edit(/.claude/skills/build/**)",
+      "Edit(/.claude/skills/status/**)",
+      "Edit(/.claude/skills/review/**)",
+      "Edit(/.claude/skills/deliver/**)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
