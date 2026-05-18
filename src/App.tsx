@@ -10,10 +10,29 @@ function App() {
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: '#2364aa',
-          colorInfo: '#2364aa',
-          colorLink: '#2364aa',
-          borderRadius: 12,
+          colorPrimary: '#07C160',
+          colorInfo: '#1677FF',
+          colorLink: '#1677FF',
+          colorSuccess: '#52C41A',
+          colorWarning: '#FAAD14',
+          colorError: '#FF4D4F',
+          colorTextBase: '#262626',
+          colorBgLayout: '#F5F5F5',
+          borderRadius: 6,
+          fontSize: 13,
+          fontFamily:
+            'PingFang SC, Microsoft YaHei, system-ui, -apple-system, sans-serif',
+          controlHeight: 32,
+          lineHeight: 1.5,
+        },
+        components: {
+          Tabs: {
+            horizontalItemPadding: '8px 16px',
+          },
+          Table: {
+            cellPaddingBlock: 8,
+            cellPaddingInline: 12,
+          },
         },
       }}
     >

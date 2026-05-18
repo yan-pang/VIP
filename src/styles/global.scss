@@ -7,21 +7,49 @@ body,
 }
 
 :root {
-  --starter-bg: #f3f7fc;
-  --starter-surface: rgba(255, 255, 255, 0.86);
-  --starter-surface-strong: #ffffff;
-  --starter-border: rgba(35, 100, 170, 0.12);
-  --starter-text: #152033;
-  --starter-muted: #5f6f86;
-  --starter-shadow: 0 20px 60px rgba(26, 57, 96, 0.08);
+  /* ChatFlow 品牌色 token,与 project/ui-brand.md 一致 */
+  --cf-primary: #07c160;
+  --cf-primary-light: #e8f8ee;
+  --cf-primary-mid: #95e1b5;
+  --cf-primary-dark: #06a052;
+  --cf-info: #1677ff;
+  --cf-success: #52c41a;
+  --cf-warning: #faad14;
+  --cf-error: #ff4d4f;
+
+  /* 中性色 */
+  --cf-text: #262626;
+  --cf-text-secondary: #595959;
+  --cf-text-tertiary: #8c8c8c;
+  --cf-border: #d9d9d9;
+  --cf-border-light: #f0f0f0;
+  --cf-bg-layout: #f5f5f5;
+  --cf-bg-surface: #ffffff;
+
+  /* 阴影 */
+  --cf-shadow-light: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --cf-shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  /* 间距基线 4px */
+  --cf-spacing-1: 4px;
+  --cf-spacing-2: 8px;
+  --cf-spacing-3: 12px;
+  --cf-spacing-4: 16px;
+  --cf-spacing-6: 24px;
+
+  /* 控件 */
+  --cf-radius: 6px;
+  --cf-radius-bubble: 8px;
+  --cf-topbar-height: 48px;
+  --cf-control-tabbar-height: 40px;
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(88, 144, 255, 0.14), transparent 35%),
-    radial-gradient(circle at top right, rgba(35, 100, 170, 0.12), transparent 28%),
-    linear-gradient(180deg, #f6f9fd 0%, #eef3f9 100%);
-  color: var(--starter-text);
+  background: var(--cf-bg-layout);
+  color: var(--cf-text);
+  font-family: PingFang SC, Microsoft YaHei, system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .app-loading {
@@ -31,89 +59,13 @@ body {
   min-height: 100vh;
 }
 
-.page-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.page-shell__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.page-shell__title {
-  margin: 0;
-  font-size: 30px;
-  letter-spacing: -0.04em;
-}
-
-.page-shell__description {
-  max-width: 760px;
-  color: var(--starter-muted);
-  font-size: 15px;
-}
-
-.page-shell__description p {
-  margin-bottom: 0;
-}
-
-.page-shell__toolbar {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 20px 22px;
-  border: 1px solid var(--starter-border);
-  border-radius: 24px;
-  background: var(--starter-surface);
-  box-shadow: var(--starter-shadow);
-  backdrop-filter: blur(16px);
-}
-
-.page-shell__search {
-  flex: 1;
-}
-
-.page-shell__table {
-  padding: 22px;
-  border: 1px solid var(--starter-border);
-  border-radius: 24px;
-  background: var(--starter-surface-strong);
-  box-shadow: var(--starter-shadow);
-}
-
-.pagination-shell {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 18px;
-}
-
-.catalog-form-row {
-  display: flex;
-  width: 100%;
-}
-
-.catalog-form-row .ant-form-item {
-  flex: 1;
-}
-
 .ant-btn:focus,
 .ant-btn:focus-visible {
   box-shadow: none;
 }
 
-@media (max-width: 960px) {
-  .page-shell__toolbar {
-    flex-direction: column;
-  }
-
-  .page-shell__search {
-    width: 100%;
-  }
-
-  .catalog-form-row {
-    flex-direction: column;
-  }
+/* 等宽数字字段(玩家 ID / 手机号 等) */
+.cf-mono {
+  font-family: SF Mono, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  color: var(--cf-text-secondary);
 }

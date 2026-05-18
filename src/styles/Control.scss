@@ -1,0 +1,236 @@
+.cf-control {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  background: var(--cf-bg-layout);
+  overflow: hidden;
+}
+
+.cf-control__body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  gap: 1px;
+}
+
+.cf-control__left,
+.cf-control__main {
+  background: var(--cf-bg-surface);
+}
+
+.cf-control__left {
+  width: 256px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cf-control__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cf-control__card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  margin-bottom: 4px;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: var(--cf-bg-layout);
+  }
+
+  &.is-selected {
+    background: var(--cf-primary-light);
+    box-shadow: inset 3px 0 0 0 var(--cf-primary);
+  }
+
+  &-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &-name {
+    font-weight: 500;
+    color: var(--cf-text);
+    font-size: 13px;
+  }
+
+  &-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--cf-text-tertiary);
+    margin-top: 2px;
+  }
+}
+
+.cf-control__add {
+  padding: 12px;
+  border-top: 1px solid var(--cf-border-light);
+
+  .ant-btn {
+    border-radius: 8px;
+    height: 36px;
+    font-weight: 500;
+  }
+}
+
+.cf-control__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a; /* 设计例外:控制台主体允许深色背景 */
+  position: relative;
+}
+
+.cf-control__viewport {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cf-control__placeholder {
+  width: 100%;
+  max-width: 760px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(45deg, #242424 0 8px, #1f1f1f 8px 16px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #d0d0d0;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.cf-control__rec {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(255, 77, 79, 0.85);
+  color: #ffffff;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  font-weight: 500;
+  animation: cf-rec-blink 1.4s infinite;
+}
+
+.cf-control__placeholder-text {
+  max-width: 480px;
+  padding: 0 16px;
+
+  strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: #ffffff;
+  }
+
+  p {
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+}
+
+.cf-control__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 16px;
+  background: #232323;
+  border-top: 1px solid #2a2a2a;
+
+  .ant-btn {
+    color: #d0d0d0;
+    background: transparent;
+    border-color: #3a3a3a;
+    border-radius: 6px;
+
+    &:hover:not(:disabled) {
+      color: #ffffff !important;
+      border-color: #5a5a5a !important;
+    }
+
+    &.ant-btn-dangerous {
+      color: #ff7875;
+      border-color: #5a3a3a;
+
+      &:hover:not(:disabled) {
+        color: #ff4d4f !important;
+        border-color: #ff4d4f !important;
+      }
+    }
+  }
+}
+
+.cf-control__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cf-bg-surface);
+}
+
+@keyframes cf-rec-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.4; }
+}
+
+.cf-control__qr {
+  width: 200px;
+  height: 200px;
+  background: #ffffff;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.cf-control__qr-grid {
+  width: 100%;
+  height: 100%;
+  background-image:
+    linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%),
+    linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 6px 6px;
+  opacity: 0.85;
+}
+
+.cf-control__qr-label {
+  position: absolute;
+  background: var(--cf-primary);
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+}

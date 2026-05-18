@@ -1,0 +1,455 @@
+.cf-workbench {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  background: var(--cf-bg-layout);
+  overflow: hidden;
+}
+
+.cf-workbench__left {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--cf-bg-surface);
+  border-right: 1px solid var(--cf-border-light);
+  display: flex;
+  flex-direction: column;
+}
+
+.cf-workbench__center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--cf-bg-surface);
+}
+
+.cf-workbench__right {
+  width: 360px;
+  flex-shrink: 0;
+  background: var(--cf-bg-surface);
+  border-left: 1px solid var(--cf-border-light);
+  transition: width 0.2s ease;
+
+  &.is-collapsed {
+    width: 32px;
+  }
+}
+
+/* 会话列表 */
+.cf-conv-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.cf-conv-list__filter {
+  padding: var(--cf-spacing-2);
+  border-bottom: 1px solid var(--cf-border-light);
+}
+
+.cf-conv-list__groups {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.cf-conv-list__search {
+  border-top: 1px solid var(--cf-border-light);
+  padding: var(--cf-spacing-2);
+}
+
+.cf-conv-list__search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cf-spacing-2);
+  width: 100%;
+  padding: var(--cf-spacing-2);
+  background: var(--cf-bg-layout);
+  border: 1px solid var(--cf-border-light);
+  border-radius: var(--cf-radius);
+  color: var(--cf-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+
+  &:hover {
+    border-color: var(--cf-primary-mid);
+    color: var(--cf-text);
+  }
+
+  kbd {
+    padding: 1px 6px;
+    background: #ffffff;
+    border: 1px solid var(--cf-border);
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--cf-text-tertiary);
+  }
+}
+
+.cf-conv-group {
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--cf-spacing-2) var(--cf-spacing-3);
+    font-size: 12px;
+    color: var(--cf-text-tertiary);
+    background: var(--cf-bg-surface);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  &__count {
+    font-family: SF Mono, Menlo, Monaco, monospace;
+  }
+}
+
+.cf-conv-card {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cf-spacing-2);
+  padding: var(--cf-spacing-2) var(--cf-spacing-3);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--cf-border-light);
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+
+  &:hover {
+    background: var(--cf-bg-layout);
+  }
+
+  &.is-selected {
+    background: var(--cf-primary-light);
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--cf-primary);
+    }
+  }
+
+  &.is-pinned {
+    background: linear-gradient(90deg, rgba(250, 173, 20, 0.06), transparent 60%);
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cf-spacing-2);
+  }
+
+  &__name {
+    font-weight: 500;
+    color: var(--cf-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__time {
+    font-size: 12px;
+    color: var(--cf-text-tertiary);
+    flex-shrink: 0;
+  }
+
+  &__preview {
+    font-size: 12px;
+    color: var(--cf-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--cf-spacing-1);
+    margin-top: 2px;
+  }
+
+  &__account {
+    font-size: 11px;
+    color: var(--cf-text-tertiary);
+    background: var(--cf-border-light);
+    padding: 0 6px;
+    border-radius: 3px;
+  }
+}
+
+/* 中列会话视图 */
+.cf-conv-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.cf-conv-view--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.cf-conv-view__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cf-spacing-2) var(--cf-spacing-4);
+  border-bottom: 1px solid var(--cf-border-light);
+  flex-shrink: 0;
+  height: 52px;
+}
+
+.cf-conv-view__title {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-spacing-2);
+  font-size: 14px;
+}
+
+.cf-conv-view__assignee {
+  font-size: 12px;
+  color: var(--cf-text-tertiary);
+  margin-left: var(--cf-spacing-3);
+}
+
+.cf-conv-view__assignee-name {
+  color: var(--cf-text);
+  margin-left: 4px;
+}
+
+.cf-conv-view__assignee-empty {
+  color: var(--cf-text-tertiary);
+  margin-left: 4px;
+  font-style: italic;
+}
+
+.cf-conv-view__stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--cf-spacing-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-spacing-3);
+  background: var(--cf-bg-layout);
+}
+
+.cf-conv-view__composer {
+  border-top: 1px solid var(--cf-border-light);
+  padding: var(--cf-spacing-2) var(--cf-spacing-3);
+  background: var(--cf-bg-surface);
+  flex-shrink: 0;
+}
+
+.cf-conv-view__readonly {
+  padding: var(--cf-spacing-3);
+  background: var(--cf-bg-layout);
+  color: var(--cf-text-tertiary);
+  border-radius: var(--cf-radius);
+  text-align: center;
+  font-size: 12px;
+}
+
+.cf-conv-view__toolbar {
+  margin-bottom: 4px;
+}
+
+.cf-conv-view__forbidden {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--cf-error);
+}
+
+.cf-conv-view__send {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+/* 消息气泡 */
+.cf-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 70%;
+  gap: 4px;
+
+  &--incoming {
+    align-self: flex-start;
+  }
+
+  &--outgoing {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+}
+
+.cf-msg__sender {
+  display: flex;
+  gap: var(--cf-spacing-2);
+  font-size: 12px;
+  color: var(--cf-text-tertiary);
+}
+
+.cf-msg__time {
+  font-family: SF Mono, Menlo, Monaco, monospace;
+}
+
+.cf-msg__bubble-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.cf-msg__bubble {
+  padding: var(--cf-spacing-2) var(--cf-spacing-3);
+  background: var(--cf-bg-surface);
+  border: 1px solid var(--cf-border-light);
+  border-radius: var(--cf-radius-bubble);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--cf-text);
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.cf-msg--outgoing .cf-msg__bubble {
+  background: var(--cf-primary-light);
+  border-color: var(--cf-primary-mid);
+}
+
+.cf-msg__status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cf-msg__failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--cf-error);
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.cf-msg__failed-tag {
+  background: rgba(255, 77, 79, 0.08);
+  padding: 0 6px;
+  border-radius: 3px;
+}
+
+.cf-msg__image {
+  display: block;
+  max-width: 240px;
+  max-height: 180px;
+  border-radius: 4px;
+  cursor: zoom-in;
+}
+
+.cf-msg__video {
+  max-width: 320px;
+  max-height: 240px;
+  border-radius: 4px;
+  background: #000;
+}
+
+.cf-msg__file {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-spacing-2);
+  padding: var(--cf-spacing-2);
+  background: var(--cf-bg-surface);
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--cf-text);
+  min-width: 200px;
+
+  .anticon {
+    font-size: 24px;
+    color: var(--cf-info);
+  }
+}
+
+.cf-msg--outgoing .cf-msg__file {
+  background: var(--cf-bg-surface);
+}
+
+/* Emoji picker */
+.cf-emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  width: 240px;
+
+  &__item {
+    border: 0;
+    background: transparent;
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    border-radius: 4px;
+
+    &:hover {
+      background: var(--cf-bg-layout);
+    }
+  }
+}
+
+/* 右列玩家档案 */
+.cf-aside {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--cf-spacing-3);
+  overflow-y: auto;
+
+  &--collapsed {
+    padding: var(--cf-spacing-2) 0;
+    align-items: center;
+  }
+}
+
+.cf-aside__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--cf-spacing-2);
+  border-bottom: 1px solid var(--cf-border-light);
+  margin-bottom: var(--cf-spacing-3);
+  font-weight: 500;
+}
+
+.cf-aside__placeholder {
+  padding: var(--cf-spacing-2);
+  background: var(--cf-bg-layout);
+  border-radius: var(--cf-radius);
+  margin-bottom: var(--cf-spacing-3);
+  font-size: 12px;
+}
+
+.cf-text-tertiary {
+  color: var(--cf-text-tertiary);
+}
