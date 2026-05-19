@@ -1,10 +1,12 @@
 import {
   CheckOutlined,
+  CopyOutlined,
   ExclamationCircleFilled,
   FileOutlined,
   LoadingOutlined,
   PaperClipOutlined,
   PictureOutlined,
+  PlayCircleOutlined,
   SmileOutlined,
 } from '@ant-design/icons'
 import {
@@ -18,12 +20,12 @@ import {
   Space,
   Tag,
   Tooltip,
+  message as antMessage,
 } from 'antd'
 import { useMemo, useRef, useState } from 'react'
 import type {
   Conversation,
   ConversationTag,
-  FailureCategory,
   Message,
 } from '../../../types/chat'
 import {
@@ -42,7 +44,10 @@ interface Props {
   conversation: Conversation | null
   currentAgentId: string
   messages: Message[]
+  isReactivating: boolean
   onSend: (conversationId: string, payload: SendPayload) => void
+  onStartReactivate: (id: string) => void
+  onCancelReactivate: (id: string) => void
   onAssignClick: () => void
   onTransferClick: () => void
   onTogglePin: (id: string) => void
@@ -50,14 +55,6 @@ interface Props {
   onToggleTag: (id: string, tag: ConversationTag) => void
   onClickFailed: (msg: Message) => void
   onRecall: (msg: Message) => void
-}
-
-const failureLabel: Record<FailureCategory, string> = {
-  rpa_exception: 'RPA 异常',
-  player_deleted_friendship: '玩家已删好友',
-  forbidden_word_backend: '违禁词拦截',
-  rate_limit_exceeded: '已达发送上限',
-  other: '发送失败',
 }
 
 const tagOptions: Array<{ key: ConversationTag; label: string }> = [
@@ -72,7 +69,10 @@ function ConversationView({
   conversation,
   currentAgentId,
   messages,
+  isReactivating,
   onSend,
+  onStartReactivate,
+  onCancelReactivate,
   onAssignClick,
   onTransferClick,
   onTogglePin,
@@ -103,16 +103,21 @@ function ConversationView({
   const player = findPlayer(conversation.playerId)
   const assignee = conversation.assigneeId ? findAgent(conversation.assigneeId) : null
   const isMyAssignment = conversation.assigneeId === currentAgentId
+  const isEnded = conversation.status === 'ended'
   const isAccountOffline = account?.status !== 'online'
   const accountBlocker = account?.status === 'banned'
     ? '该企微号已封禁,所有消息无法发送'
     : account?.status === 'offline'
       ? '该企微号离线,请到控制台重新登录'
       : null
+  // 已结束 + 主动发起态 → 解锁输入区(账号在线 + 玩家未删好友才允许)
+  const canReactivate = isEnded && !isAccountOffline && !conversation.playerHasDeletedFriendship
+  const canEditWhileEnded = isEnded && isReactivating && canReactivate
   const isReadOnly =
-    (conversation.assigneeId !== null && !isMyAssignment) ||
-    conversation.status === 'ended' ||
-    isAccountOffline
+    (conversation.assigneeId !== null && !isMyAssignment && !isEnded) ||
+    (isEnded && !canEditWhileEnded) ||
+    (isAccountOffline && !isEnded)
+  const actionsDisabled = isEnded // Diff C:已结束分组所有标准操作按钮禁用
 
   const handleSendText = () => {
     const text = draft.trim()
@@ -158,6 +163,11 @@ function ConversationView({
 
   const insertEmoji = (e: string) => setDraft((d) => d + e)
 
+  const handleCopyId = () => {
+    navigator.clipboard?.writeText(conversation.id)
+    antMessage.success(`会话 ID 已复制:${conversation.id}`)
+  }
+
   return (
     <div className="cf-conv-view">
       <header className="cf-conv-view__header">
@@ -174,19 +184,57 @@ function ConversationView({
               <span className="cf-conv-view__assignee-empty">未指派</span>
             )}
           </span>
+          <Tooltip title="点击复制会话 ID">
+            <button
+              type="button"
+              className="cf-conv-view__id"
+              onClick={handleCopyId}
+            >
+              <span className="cf-text-tertiary">ID</span>
+              <code>{conversation.id}</code>
+              <CopyOutlined />
+            </button>
+          </Tooltip>
         </div>
         <Space size="small">
-          {conversation.assigneeId === null ? (
+          {isEnded ? (
+            isReactivating ? (
+              <Button size="small" onClick={() => onCancelReactivate(conversation.id)}>
+                取消发起
+              </Button>
+            ) : (
+              <Tooltip
+                title={
+                  isAccountOffline
+                    ? '该企微号当前离线/封禁,无法主动发起'
+                    : conversation.playerHasDeletedFriendship
+                      ? '玩家已删好友,无法主动发起'
+                      : '解锁输入区,主动给玩家发起会话;发送成功后会话进入会话中'
+                }
+              >
+                <Button
+                  size="small"
+                  type="primary"
+                  ghost
+                  icon={<PlayCircleOutlined />}
+                  disabled={!canReactivate}
+                  onClick={() => onStartReactivate(conversation.id)}
+                >
+                  主动发起会话
+                </Button>
+              </Tooltip>
+            )
+          ) : conversation.assigneeId === null ? (
             <Button size="small" type="primary" ghost onClick={onAssignClick}>
               指派
             </Button>
           ) : isMyAssignment ? (
-            <Button size="small" onClick={onTransferClick}>
+            <Button size="small" disabled={actionsDisabled} onClick={onTransferClick}>
               转接
             </Button>
           ) : null}
           <Dropdown
-            disabled={!isMyAssignment || conversation.status === 'ended'}
+            disabled={!isMyAssignment || actionsDisabled}
             menu={{
               items: tagOptions.map((t) => ({
                 key: t.key,
@@ -204,7 +252,7 @@ function ConversationView({
           </Dropdown>
           <Button
             size="small"
-            disabled={conversation.status === 'ended'}
+            disabled={actionsDisabled}
             onClick={() => onTogglePin(conversation.id)}
           >
             {conversation.pinned ? '取消置顶' : '置顶'}
@@ -212,7 +260,7 @@ function ConversationView({
           <Button
             size="small"
             danger
-            disabled={!isMyAssignment || conversation.status === 'ended'}
+            disabled={!isMyAssignment || actionsDisabled}
             onClick={() => {
               Modal.confirm({
                 title: '结束会话',
@@ -230,6 +278,14 @@ function ConversationView({
 
       {accountBlocker && (
         <Alert type="error" showIcon banner message={accountBlocker} />
+      )}
+      {isEnded && isReactivating && !accountBlocker && (
+        <Alert
+          type="info"
+          showIcon
+          banner
+          message="主动发起态:发送成功后会话将进入会话中并指派给你;发送失败状态保持不变,可继续重试"
+        />
       )}
       {conversation.playerHasDeletedFriendship && !accountBlocker && (
         <Alert
@@ -254,8 +310,8 @@ function ConversationView({
       <footer className="cf-conv-view__composer">
         {isReadOnly ? (
           <div className="cf-conv-view__readonly">
-            {conversation.status === 'ended'
-              ? '会话已结束,只能查看历史'
+            {isEnded
+              ? '会话已结束,如需继续沟通请点击右上角「主动发起会话」'
               : isAccountOffline
                 ? `企微号 ${account?.shortName ?? ''} 当前不可用,无法发送消息`
                 : `此会话已指派给 ${assignee?.name ?? '其他客服'},你只能查看`}
@@ -315,7 +371,11 @@ function ConversationView({
             </Space>
             <Input.TextArea
               autoSize={{ minRows: 2, maxRows: 4 }}
-              placeholder="输入消息,Enter 发送,Shift+Enter 换行"
+              placeholder={
+                canEditWhileEnded
+                  ? '输入消息主动发起会话,Enter 发送,Shift+Enter 换行'
+                  : '输入消息,Enter 发送,Shift+Enter 换行'
+              }
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onPressEnter={(e) => {
@@ -459,9 +519,6 @@ function MessageBubble({
                 onClick={() => isClickableFailed && onClickFailed(message)}
               >
                 <ExclamationCircleFilled style={{ color: '#FF4D4F' }} />
-                <span className="cf-msg__failed-tag">
-                  {failureLabel[failureCat ?? 'other']}
-                </span>
               </span>
             </Tooltip>
           )}

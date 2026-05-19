@@ -16,8 +16,8 @@
 
 | 领域 | 当前阶段 | 启用版本 | 设计文档 | 长期 PRD | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| [chat-workbench](domains/chat-workbench/) | breakdown 已完成,待 design | v1.0 | [design.md](domains/chat-workbench/design.md) | [prd.md](domains/chat-workbench/delivery/prd.md) | 客服工作台;V1 核心;design.md 前 3 章已填,共 19 条事项待进入 design 阶段后细化 |
-| [player-center](domains/player-center/) | breakdown | v1.0 | [design.md](domains/player-center/design.md) | [prd.md](domains/player-center/delivery/prd.md) | 玩家中心;V1 核心 |
+| [chat-workbench](domains/chat-workbench/) | build 已完成 demo,待需求方 review | v1.0 | [design.md](domains/chat-workbench/design.md) | [prd.md](domains/chat-workbench/delivery/prd.md) | 客服工作台;V1 核心;design 全套(D1+D2+D3)已落;V1 28 条对应代码实现于 `src/views/workbench` + `src/views/control`;Mock 数据驱动。**2026-05-19 补丁**:已结束会话支持客服主动发起、会话 ID 显式可复制、Mock 增违禁词拦截样例、左列分组折叠、设计与代码差异已对齐 |
+| [player-center](domains/player-center/) | breakdown 已完成,待 design | v1.0 | [design.md](domains/player-center/design.md) | [prd.md](domains/player-center/delivery/prd.md) | 玩家中心;V1 核心;design.md 前 3 章已落,8 条事项(6 条 R* + 2 条追加),含 `/players` 列表页 + `/players/:id` 详情页 + 工作台 slot |
 | [ops-admin](domains/ops-admin/) | breakdown | v1.0 | [design.md](domains/ops-admin/design.md) | [prd.md](domains/ops-admin/delivery/prd.md) | 运营管理(违禁词、企微号-云桌面绑定、初始化配置) |
 | [permission](domains/permission/) | breakdown | v1.0 | [design.md](domains/permission/design.md) | [prd.md](domains/permission/delivery/prd.md) | 权限管理(客服账号、角色、企微号授权);ChatFlow 自维护 |
 | automation | 未启 | v1.1+ | - | - | 智能路由、自动分配、下班自动回复 |
@@ -67,8 +67,11 @@
 
 ## 当前下一步
 
-- **chat-workbench 进入 design 阶段**:按 `product-design-kit/design/product-design.md` 在 `design.md` 的 `功能详细描述` 章节补齐领域结构、页面清单、业务流程图、共享规则、页面详设、关键交互。建议分 D1 骨架 → D2 主页面 → D3 辅助页面三步。
-- 先做 chat-workbench 的 design,再按同样节奏推 `player-center` 与 `ops-admin`(当前都在 `breakdown`)。
+- **chat-workbench**:demo 已完成,等需求方 review;后续根据反馈再迭代。
+- **下一个领域 breakdown**:在 `player-center` / `ops-admin` / `permission` 三选一开始(均在 `breakdown` 阶段,只有领域骨架,design.md 还未补)。
+  - `player-center` 是 chat-workbench 直接依赖(右列玩家档案挂载位),建议优先。
+  - `ops-admin` 提供违禁词库、企微号-云桌面绑定、初始化配置。
+  - `permission` 提供客服账号、角色、企微号授权;chat-workbench 已通过指派/转接弹窗使用。
 - 把 `project/research/v1.0-qiwei-rpa.md` 的合规与风控约束(IP 一致性、频率限制、脱敏、应急预案)在 design 进展到 ops-admin 时回写到该领域。
 - 跟进外部依赖对齐:企微会话存档 API 开通、无影云 API + 视频流契约、SCRM 数据互通协议。
 

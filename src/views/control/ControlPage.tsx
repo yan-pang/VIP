@@ -3,12 +3,11 @@ import {
   DeleteOutlined,
   PlusOutlined,
   PoweroffOutlined,
-  RightOutlined,
   ScanOutlined,
 } from '@ant-design/icons'
 import { Avatar, Badge, Button, Dropdown, Empty, Modal, Space, message as antMessage } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { wechatAccounts } from '../../services/chatflowMock'
 import { avatarColor } from '../../services/avatarColor'
 import type { WechatAccount, WechatAccountStatus } from '../../types/chat'
@@ -30,7 +29,6 @@ const statusColor: Record<WechatAccountStatus, string> = {
 
 function ControlPage() {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const focusId = searchParams.get('focus')
 
   const [accounts, setAccounts] = useState<WechatAccount[]>(wechatAccounts)
@@ -151,7 +149,6 @@ function ControlPage() {
                     <div className="cf-control__card-name">{a.shortName}</div>
                     <div className="cf-control__card-meta">
                       <span style={{ color: statusColor[a.status] }}>{statusLabel[a.status]}</span>
-                      {a.unreadCount > 0 && <Badge count={a.unreadCount} size="small" />}
                     </div>
                   </div>
                 </button>
@@ -192,16 +189,6 @@ function ControlPage() {
                     删除号
                   </Button>
                 </Space>
-                {selected && (
-                  <Button
-                    type="text"
-                    icon={<RightOutlined />}
-                    iconPosition="end"
-                    onClick={() => navigate(`/workbench?accountId=${selected.id}`)}
-                  >
-                    跳工作台对应会话
-                  </Button>
-                )}
               </footer>
             </>
           ) : (

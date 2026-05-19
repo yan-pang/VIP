@@ -75,6 +75,12 @@ export const players: Player[] = [
     nickname: '小梅',
     associatedAccountIds: ['wx_xiaoqin'],
   },
+  {
+    id: 'p_xiaotao',
+    nickname: '小桃',
+    remark: '老客',
+    associatedAccountIds: ['wx_xiaoqin'],
+  },
 ]
 
 export const conversations: Conversation[] = [
@@ -161,6 +167,23 @@ export const conversations: Conversation[] = [
     createdAt: '2026-05-17T15:30:00+08:00',
     playerHasDeletedFriendship: true,
   },
+  {
+    id: 'c_006',
+    accountId: 'wx_xiaoqin',
+    playerId: 'p_xiaotao',
+    status: 'ended',
+    assigneeId: 'agent_self',
+    assigneeHistory: [
+      { agentId: 'agent_self', changedAt: '2026-05-16T10:00:00+08:00', reason: 'explicit' },
+    ],
+    pinned: false,
+    tags: [],
+    unreadCount: 0,
+    lastMessagePreview: '感谢咨询,有需要随时找我',
+    lastMessageAt: '2026-05-16T11:20:00+08:00',
+    createdAt: '2026-05-16T09:50:00+08:00',
+    playerHasDeletedFriendship: false,
+  },
 ]
 
 export const messages: Message[] = [
@@ -245,6 +268,18 @@ export const messages: Message[] = [
     status: 'sent',
   },
 
+  // c_002 主线:玩家发但还没人指派
+  {
+    id: 'm_2001',
+    conversationId: 'c_002',
+    direction: 'incoming',
+    contentType: 'text',
+    text: '在吗 我充值后没到账',
+    senderId: 'p_xiaolin',
+    createdAt: '2026-05-18T15:38:00+08:00',
+    status: 'sent',
+  },
+
   // c_003 主线:发送中 + 已送达
   {
     id: 'm_3001',
@@ -297,6 +332,58 @@ export const messages: Message[] = [
     status: 'sent',
   },
 
+  // c_004 主线:别的客服(张三)在接,我只能查看
+  {
+    id: 'm_4001',
+    conversationId: 'c_004',
+    direction: 'incoming',
+    contentType: 'text',
+    text: '客服你好,我想咨询下活动',
+    senderId: 'p_xiaomei',
+    createdAt: '2026-05-18T09:50:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_4002',
+    conversationId: 'c_004',
+    direction: 'outgoing',
+    contentType: 'text',
+    text: '你好,具体哪个活动?',
+    senderId: 'agent_zhang',
+    createdAt: '2026-05-18T10:01:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_4003',
+    conversationId: 'c_004',
+    direction: 'incoming',
+    contentType: 'text',
+    text: '充值送豪礼那个',
+    senderId: 'p_xiaomei',
+    createdAt: '2026-05-18T10:15:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_4004',
+    conversationId: 'c_004',
+    direction: 'outgoing',
+    contentType: 'text',
+    text: '稍等,我帮你查下规则',
+    senderId: 'agent_zhang',
+    createdAt: '2026-05-18T10:20:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_4005',
+    conversationId: 'c_004',
+    direction: 'incoming',
+    contentType: 'text',
+    text: '明天再联系你',
+    senderId: 'p_xiaomei',
+    createdAt: '2026-05-18T13:00:00+08:00',
+    status: 'sent',
+  },
+
   // c_005 主线:删好友失败
   {
     id: 'm_5001',
@@ -313,6 +400,56 @@ export const messages: Message[] = [
       message: '玩家已删好友,后续消息无法送达',
       executedAt: '2026-05-17T16:30:00+08:00',
     },
+  },
+
+  // c_001 追加:违禁词后端兜底拦截样例
+  {
+    id: 'm_1008',
+    conversationId: 'c_001',
+    direction: 'outgoing',
+    contentType: 'text',
+    text: '这次给你额外保证最低价,放心买',
+    senderId: 'agent_self',
+    createdAt: '2026-05-18T15:42:00+08:00',
+    status: 'failed',
+    failure: {
+      category: 'forbidden_word_backend',
+      code: 'FORBIDDEN_WORD',
+      message: '消息命中违禁词「保证最低价」,后端兜底拦截,未发送',
+      executedAt: '2026-05-18T15:42:00+08:00',
+    },
+  },
+
+  // c_006 主线:正常结束的会话(号在线 + 玩家未删好友) — 演示主动发起会话
+  {
+    id: 'm_6001',
+    conversationId: 'c_006',
+    direction: 'incoming',
+    contentType: 'text',
+    text: '你好,想问下上周的活动还能补领吗',
+    senderId: 'p_xiaotao',
+    createdAt: '2026-05-16T09:50:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_6002',
+    conversationId: 'c_006',
+    direction: 'outgoing',
+    contentType: 'text',
+    text: '可以的,我帮你提交补领申请',
+    senderId: 'agent_self',
+    createdAt: '2026-05-16T10:05:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_6003',
+    conversationId: 'c_006',
+    direction: 'outgoing',
+    contentType: 'text',
+    text: '感谢咨询,有需要随时找我',
+    senderId: 'agent_self',
+    createdAt: '2026-05-16T11:20:00+08:00',
+    status: 'sent',
   },
 ]
 
@@ -335,7 +472,7 @@ export const findAgent = (id: string) => agents.find((a) => a.id === id)
 
 /**
  * Mock 发送结果模拟器(无后端的本地概率分布)
- * 60% 成功 / 15% RPA 异常 / 10% 删好友 / 10% 速率上限 / 5% 其它
+ * 55% 成功 / 15% RPA 异常 / 10% 删好友 / 10% 速率上限 / 5% 违禁词后端兜底 / 5% 其它
  */
 export function simulateSendOutcome(): {
   status: 'sent'
@@ -344,8 +481,8 @@ export function simulateSendOutcome(): {
   failure: import('../types/chat').FailureDetail
 } {
   const r = Math.random()
-  if (r < 0.6) return { status: 'sent' }
-  if (r < 0.75) {
+  if (r < 0.55) return { status: 'sent' }
+  if (r < 0.7) {
     return {
       status: 'failed',
       failure: {
@@ -359,7 +496,7 @@ export function simulateSendOutcome(): {
       },
     }
   }
-  if (r < 0.85) {
+  if (r < 0.8) {
     return {
       status: 'failed',
       failure: {
@@ -370,13 +507,24 @@ export function simulateSendOutcome(): {
       },
     }
   }
-  if (r < 0.95) {
+  if (r < 0.9) {
     return {
       status: 'failed',
       failure: {
         category: 'rate_limit_exceeded',
         code: 'RATE_LIMIT',
         message: '该企微号已达发送上限,请稍后再试',
+        executedAt: new Date().toISOString(),
+      },
+    }
+  }
+  if (r < 0.95) {
+    return {
+      status: 'failed',
+      failure: {
+        category: 'forbidden_word_backend',
+        code: 'FORBIDDEN_WORD',
+        message: '消息命中违禁词,后端兜底拦截,未发送',
         executedAt: new Date().toISOString(),
       },
     }

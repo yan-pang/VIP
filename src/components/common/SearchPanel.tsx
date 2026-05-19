@@ -113,7 +113,6 @@ function SearchPanel({ open, onClose }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <span className="cf-text-tertiary">Esc 关闭</span>
           <CloseOutlined onClick={onClose} style={{ cursor: 'pointer' }} />
         </div>
 

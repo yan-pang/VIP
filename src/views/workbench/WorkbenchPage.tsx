@@ -1,4 +1,3 @@
-import { Modal } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 import type { ShellOutletContext } from '../../components/layouts/NavigationLayout'
@@ -11,10 +10,9 @@ import {
   agents,
   conversations as conversationsSeed,
   currentAgentId,
-  findAccount,
-  findPlayer,
   messages as messagesSeed,
   simulateSendOutcome,
+  wechatAccounts,
 } from '../../services/chatflowMock'
 import type { Conversation, ConversationTag, Message } from '../../types/chat'
 import '../../styles/Workbench.scss'
@@ -28,8 +26,13 @@ function WorkbenchPage() {
   const [messages, setMessages] = useState<Message[]>(messagesSeed)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [accountFilter, setAccountFilter] = useState<string>('all')
+  // 多选筛选:默认勾选全部企微号 = 不筛选
+  const [accountFilter, setAccountFilter] = useState<string[]>(() =>
+    wechatAccounts.map((a) => a.id),
+  )
   const [asideCollapsed, setAsideCollapsed] = useState(false)
+  // 已结束会话的"主动发起"临时态 id 集合;成功发送一条后自动清除
+  const [reactivatingIds, setReactivatingIds] = useState<Set<string>>(new Set())
 
   // 弹层状态
   const [failureForMessageId, setFailureForMessageId] = useState<string | null>(null)
@@ -52,17 +55,17 @@ function WorkbenchPage() {
     }
     const acc = searchParams.get('accountId')
     if (acc) {
-      setAccountFilter(acc)
+      setAccountFilter([acc])
       const next = new URLSearchParams(searchParams)
       next.delete('accountId')
       setSearchParams(next, { replace: true })
     }
   }, [searchParams, setSearchParams, conversations])
 
-  const visibleConversations = useMemo(() => {
-    if (accountFilter === 'all') return conversations
-    return conversations.filter((c) => c.accountId === accountFilter)
-  }, [accountFilter, conversations])
+  const visibleConversations = useMemo(
+    () => conversations.filter((c) => accountFilter.includes(c.accountId)),
+    [accountFilter, conversations],
+  )
 
   const selected = useMemo(
     () => (selectedId ? conversations.find((c) => c.id === selectedId) ?? null : null),
@@ -170,9 +173,42 @@ function WorkbenchPage() {
   const handleEndConv = useCallback(
     (id: string) => {
       updateConv(id, { status: 'ended', lastMessagePreview: '会话已结束' })
+      setReactivatingIds((prev) => {
+        if (!prev.has(id)) return prev
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     },
     [updateConv],
   )
+
+  const handleStartReactivate = useCallback((id: string) => {
+    setReactivatingIds((prev) => {
+      if (prev.has(id)) return prev
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleCancelReactivate = useCallback((id: string) => {
+    setReactivatingIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
+
+  const clearReactivating = useCallback((id: string) => {
+    setReactivatingIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
 
   const handleToggleTag = useCallback(
     (id: string, tag: ConversationTag) => {
@@ -221,9 +257,13 @@ function WorkbenchPage() {
       if (!conv) return
 
       const now = new Date().toISOString()
-      const isImplicitFirst = conv.assigneeId === null
+      // 主动发起态(已结束 + 客服点过"主动发起会话"):状态机和指派人不在发送前变更,
+      // 只有发送成功后才改 active + 指派给当前客服。
+      const isProactiveReactivate =
+        conv.status === 'ended' && reactivatingIds.has(conversationId)
+      const isImplicitFirst = !isProactiveReactivate && conv.assigneeId === null
 
-      // 隐式指派同步发生
+      // 隐式指派同步发生(仅 queueing 路径)
       if (isImplicitFirst) {
         updateConv(conversationId, {
           assigneeId: currentAgentId,
@@ -298,6 +338,28 @@ function WorkbenchPage() {
           )
         }
 
+        // 主动发起态:发送成功才把会话从 ended 切到 active 并指派给当前客服;失败保持 ended
+        if (isProactiveReactivate && outcome.status === 'sent') {
+          const ts = new Date().toISOString()
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === conversationId
+                ? {
+                    ...c,
+                    status: 'active',
+                    assigneeId: currentAgentId,
+                    assigneeHistory: [
+                      ...c.assigneeHistory,
+                      { agentId: currentAgentId, changedAt: ts, reason: 'explicit', note: '客服主动发起' },
+                    ],
+                    playerHasDeletedFriendship: false,
+                  }
+                : c,
+            ),
+          )
+          clearReactivating(conversationId)
+        }
+
         // 删好友标记
         if (
           outcome.status === 'failed' &&
@@ -321,7 +383,7 @@ function WorkbenchPage() {
         })
       }, delay)
     },
-    [conversations, updateConv],
+    [conversations, updateConv, reactivatingIds, clearReactivating],
   )
 
   const handleClickFailedMessage = useCallback((msg: Message) => {
@@ -358,26 +420,10 @@ function WorkbenchPage() {
           accountFilter={accountFilter}
           onSelect={handleSelectConv}
           onAccountFilterChange={(next) => {
-            // 切到的筛选范围会让当前打开的会话从左列消失 → 二次确认
-            if (
-              next !== 'all' &&
-              selected &&
-              selected.accountId !== next
-            ) {
-              const player = findPlayer(selected.playerId)
-              const targetAcc = findAccount(next)
-              Modal.confirm({
-                title: '切换号筛选',
-                content: `当前打开的会话(${player?.remark ?? player?.nickname ?? '玩家'})不属于「${targetAcc?.shortName ?? '该号'}」,筛选后中列会关闭。确认继续?`,
-                okText: '继续筛选',
-                cancelText: '取消',
-                onOk: () => {
-                  setAccountFilter(next)
-                  setSelectedId(null)
-                },
-              })
-            } else {
-              setAccountFilter(next)
+            setAccountFilter(next)
+            // 当前会话所属号不在新筛选集合 → 直接关闭中列,不打断
+            if (selected && !next.includes(selected.accountId)) {
+              setSelectedId(null)
             }
           }}
           onTogglePin={handleTogglePin}
@@ -390,7 +436,10 @@ function WorkbenchPage() {
           conversation={selected}
           currentAgentId={currentAgentId}
           messages={messages}
+          isReactivating={selected ? reactivatingIds.has(selected.id) : false}
           onSend={handleSendMessage}
+          onStartReactivate={handleStartReactivate}
+          onCancelReactivate={handleCancelReactivate}
           onAssignClick={() =>
             selected && setAssignFor({ conversationId: selected.id, mode: 'assign' })
           }
