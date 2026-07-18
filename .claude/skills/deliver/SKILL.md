@@ -8,21 +8,29 @@ argument-hint: <domain-or-version>
 
 本阶段有两类产物,走两套路径。先看参数判断:
 
-- 参数是版本号(如 `v1.1`、`release/v1.1`)→ 走 **B 路径**(版本级对外交付,自动组装)
-- 参数是领域名 → 走 **A 路径**(领域级长期 PRD / 测试用例)
+- 参数是版本号(如 `v1.1`、`release/v1.1`)→ 走 **B 路径**(版本级对外交付,自动组装快照 + 本版变更摘要)
+- 参数是领域名 → 走 **A 路径**(领域级长期 PRD / 测试用例;也可生成「当前态」交付物快照)
 
 ## A. 领域级 PRD / 测试用例(长期资产)
 
-1. 先阅读该领域的 `design.md`、`project/ui-brand.md`;如 `project/research/` 或 `project/tech/` 下有相关版本文件,按需阅读。
-2. 再阅读 `product-design-kit/design/external-prd.md`、`product-design-kit/design/test-strategy.md`、`product-design-kit/design/test-cases.md` 和 `product-design-kit/tools/prd-checklist.md`。
+1. 先读 `project/TASKS.md`(现状);该领域 `design.md` **先看 `## 章节索引` 再按需读相关小节**、`project/ui-brand.md`;如需"为什么这样定"可查该领域 `decisions.md`;如 `project/research/` 或 `project/tech/` 下有相关版本文件,按需阅读。
+2. 再阅读 `product-design-kit/design/external-prd.md`、`product-design-kit/design/release-prd-spec.md`、`product-design-kit/design/test-strategy.md`、`product-design-kit/design/test-cases.md` 和 `product-design-kit/tools/prd-checklist.md`。
 3. 在 `project/domains/<domain>/delivery/` 下产出或补全:
-   - `prd.md`:领域长期 PRD,条目使用 `P-XXX` 稳定编号(按 `external-prd.md` 的「条目标题格式」)
+   - `prd.md`:领域长期 PRD。
+     - framing 段(名词解释 / 领域背景 / 核心目标 / 长期稳定角色 / NFR / 非目标)按 `external-prd.md`「领域 framing」填写。
+     - 需求条目使用 `P-XXX` 稳定编号,内部结构按 `external-prd.md`「条目内部结构」(对齐 `release-prd-spec.md` §7 富结构)。
+     - **单一事实源**:调研只链接 `project/research/`、产品设计与流程图只链接 `design.md`,不复制正文。
    - `test/strategy.md`:领域测试策略
-   - `test/cases.md`:领域测试用例,复用 PRD 的条目编号
-4. 领域 PRD 是**权威源**;以后修订直接改这里。
-5. 对照 `prd-checklist.md` 执行交付前自查,并同步更新 `project/overview.md` 的 G2 状态。
+   - `test/cases.md`:领域测试用例,复用 PRD 的条目编号(可引用 `R-XXX-NN` 规则编号增强可追溯)
+4. 领域 PRD 是**需求条目的唯一事实源**;以后修订直接改这里。
+5. 对照 `prd-checklist.md` 执行交付前自查,并同步更新 `project/TASKS.md` 的状态与最近动态(`project/overview.md` 仅地图变化时更新)。
 
-## B. 版本级对外交付(release-prd / test-plan,自动组装)
+> **生成「当前态」交付物快照(可选)**:需要给研发看「现在最新长什么样」时,可按 B.5 的组装逻辑生成一份当前全量 `release-prd` 全文(不打 tag、不限定版本),无需先发版。
+
+## B. 版本级对外交付(release-prd / test-plan,组装快照 + 变更摘要)
+
+> 交付物 = **完整快照(当前全量态)+ 顶部本版变更摘要**。研发打开一份文件即可掌握当前全貌与本版改动。
+> 结构严格按 `product-design-kit/design/release-prd-spec.md`;各章节从单一事实源组装,不手动追加正文。
 
 ### B.1 前置确认
 
@@ -76,52 +84,27 @@ argument-hint: <domain-or-version>
 
 **必须等用户确认**,不直接写文件。如果用户补充 / 修正,按新清单重新组装。
 
-### B.5 生成 release-prd.md
+### B.5 生成 release-prd.md(组装完整快照)
 
-结构:
+严格按 `release-prd-spec.md` 的 12 章结构组装。各章节按其「章节组装来源」从单一事实源拉取:
 
-```markdown
-# 版本 v1.1 对外 PRD
-
-> 本文件由 /deliver 生成,请勿手动编辑。改动请回到对应领域 PRD 再重新触发 /deliver。
-
-## 版本摘要
-
-- 发布版本:v1.1
-- 对比基线:release/v1.0(或 首版)
-- 涉及领域:用户管理、订单
-- 条目统计:新增 2 / 修订 1 / 废弃 1
-
-## 新增条目
-
-### 用户管理 · P-102 新增角色审批流
-
-<完整摘录该条目所有内容,包括 业务规则、页面与交互、边界与异常、验收标准 等>
-
-### 订单 · P-215 重构 refund 规则
-
-...
-
-## 修订条目
-
-### 用户管理 · P-107 角色分页默认值调整
-
-**修订说明**:<本版相对 base 的关键差异,一两句>
-
-<完整摘录当前版本该条目所有内容>
-
-## 废弃条目
-
-### 用户管理 · P-098 旧的单步审批入口
-
-**废弃说明**:本版起不再生效。对接方如仍在引用,需迁移到 P-102。
-```
+| 章节 | 组装方式 |
+| --- | --- |
+| 顶部「本版变更摘要」+ §1 变更日志 | 由 B.3/B.4 的 diff 结果生成:本版新增 / 修订 / 废弃清单 + 一行差异说明 |
+| §2 名词解释、§3.1 背景、§4 核心目标、§8 NFR | 摘录各涉及领域 `prd.md` 的 framing 段 |
+| §3.2 前期调研 | 摘要 + 链接 `project/research/` 对应文件 |
+| §3.3 优先级、§5.1 功能清单 | 由条目 `优先级` / `需求总览表` 汇总 |
+| §5.2 不在本期范围 | 领域 `prd.md` 非目标 + 本版补充 |
+| §6 设计概述 | 链接 + 关键图引用 `design.md`(不重绘) |
+| §7 详细需求 | **完整摘录当前全部生效(非废弃)`P-XXX` 条目**,按领域分组、领域内按编号排序;条目状态行带 `新增@vX/修订@vX` 标记 |
+| §9 规划 / §10 交付材料 / §11 评审记录 / §12 检查项 | 版本级:生成时填 / 取 `overview.md` / 引用 `prd-checklist.md` |
 
 关键要求:
-- **完整摘录**,不用链接。对方拿到这份 md 就是自包含交付。
-- 修订条目在摘录前加一段「修订说明」,说明本版相对 base 的关键差异。
+- **完整快照**:§7 摘录当前**全部生效条目**(不止本版变更的),让研发看到当前全貌;本版改了哪些靠状态标记 + 顶部摘要区分。
+- **完整摘录,不用链接**(§7 条目正文)。对方拿到这份 md 就是自包含交付。
+- **修订条目**在条目前加一段「修订说明」,说明本版相对 base 的关键差异。
 - 顶部第一行警告"本文件由 /deliver 生成,请勿手动编辑"。
-- 按领域分组,领域内按编号排序。
+- 各章节正文来自单一事实源,**不在 release-prd 里手写新增正文**。
 
 ### B.6 生成 test-plan.md
 
@@ -134,16 +117,13 @@ argument-hint: <domain-or-version>
 
 ## 版本摘要
 
-<复用 release-prd 的版本摘要>
+<复用 release-prd 的本版变更摘要>
 
 ## 新增 / 修订条目的测试重点
 
 ### P-102(用户管理)
 - 参考 `project/domains/user-management/delivery/test/strategy.md` 和 `test/cases.md`
-- 本版重点观察面:<从对应策略提炼,如果对应策略里明确了本条的观察面>
-
-### P-215(订单)
-...
+- 本版重点观察面:<从对应策略提炼>
 
 ## 回归范围
 
@@ -170,6 +150,7 @@ argument-hint: <domain-or-version>
 ## 公共约束
 
 - 领域 PRD 条目编号必须稳定,以它作为版本 release-prd 的组装锚点。
+- **单一事实源**:每个事实只有一个 home。调研在 `research/`、产品设计与流程图在 `design.md`、需求条目在领域 `prd.md`;release-prd 是这些源 + 版本框架的**组装产物**,不引入新的事实源。
 - 需求 / 规则编号以 `delivery/prd.md` 为准,`test/strategy.md` 和 `test/cases.md` 复用同一套编号。
-- 不要在版本 `release-prd.md` 或 `test-plan.md` 里手动追加新内容;新内容应先进领域 PRD,再重新触发 `/deliver`。
+- 不要在版本 `release-prd.md` 或 `test-plan.md` 里手动追加新内容;新内容应先进对应事实源,再重新触发 `/deliver`。
 - 如果用户说"本版还涉及 P-XXX 但 diff 没识别到",可能是该条目内容没在 base..HEAD 之间变化,但确实是本版首次对外披露——此时按用户指示把它当"新增"或"修订"纳入。

@@ -40,7 +40,7 @@ function SearchPanel({ open, onClose }: Props) {
   }, [open])
 
   const { contacts, msgHits } = useMemo(() => {
-    if (query.trim().length < 2) return { contacts: [], msgHits: [] }
+    if (query.trim().length < 1) return { contacts: [], msgHits: [] }
     const q = query.trim().toLowerCase()
 
     const seen = new Set<string>()
@@ -66,7 +66,7 @@ function SearchPanel({ open, onClose }: Props) {
     }
 
     const msgHits: MessageHit[] = messages
-      .filter((m) => m.text?.toLowerCase().includes(q))
+      .filter((m) => m.direction !== 'system' && m.text?.toLowerCase().includes(q))
       .slice(0, 5)
       .map((m) => {
         const c = conversations.find((cc) => cc.id === m.conversationId)
@@ -109,7 +109,7 @@ function SearchPanel({ open, onClose }: Props) {
           <Input
             autoFocus
             variant="borderless"
-            placeholder="搜索联系人 / 聊天记录 / 标签(至少 2 字)"
+            placeholder="搜索联系人 / 聊天记录 / 标签"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -117,9 +117,9 @@ function SearchPanel({ open, onClose }: Props) {
         </div>
 
         <div className="cf-search-panel__results">
-          {query.trim().length < 2 ? (
+          {query.trim().length < 1 ? (
             <p className="cf-text-tertiary cf-search-panel__hint">
-              请至少输入 2 个字符,例如:小琪 / 优惠券 / 礼包
+              输入关键词开始搜索,例如:丑 / 小琪 / 优惠券
             </p>
           ) : contacts.length === 0 && msgHits.length === 0 ? (
             <p className="cf-text-tertiary cf-search-panel__hint">

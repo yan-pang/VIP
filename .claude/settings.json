@@ -1,6 +1,17 @@
 {
   "permissions": {
     "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
       "Bash(npm run dev)",
       "Bash(npm run build)",
       "Bash(npm run lint)",
@@ -13,11 +24,16 @@
       "Bash(git diff *)",
       "Bash(git describe *)",
       "Bash(git show *)",
-      "Edit(/.claude/skills/build/**)",
-      "Edit(/.claude/skills/status/**)",
-      "Edit(/.claude/skills/review/**)",
-      "Edit(/.claude/skills/deliver/**)",
-      "Bash(git commit -m ' *)"
+      "Bash(git add *)",
+      "Bash(git commit -m *)",
+      "Edit(project/**)",
+      "Write(project/**)",
+      "Edit(src/**)",
+      "Write(src/**)",
+      "Edit(.claude/**)",
+      "Write(.claude/**)",
+      "Edit(CLAUDE.md)",
+      "Edit(README.md)"
     ]
   }
 }

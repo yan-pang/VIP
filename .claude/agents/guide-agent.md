@@ -19,7 +19,8 @@
 
 固定围绕 `project/domains/<domain>/` 工作。
 
-- `design.md`:领域主设计文档,**只装产品设计**(给 AI / demo 实现)
+- `design.md`:领域主设计文档,**只装当前稳定产品设计**(给 AI / demo 实现);顶部带 `## 章节索引`
+- `decisions.md`:领域决策/迭代史(追加式,倒序,按需读;把"为什么/变过什么"从 design.md 分离出来)
 - `delivery/prd.md`:领域长期 PRD(权威源,持续演进)
 - `delivery/test/strategy.md`:领域测试策略
 - `delivery/test/cases.md`:领域测试用例库
@@ -27,7 +28,7 @@
 固定边界:
 
 - 业务领域**不再**在目录下放 `research.md` 或 `tech/`;这两类跨领域内容统一放项目级目录。
-- `design.md` 只承接会影响页面、交互、流程或 Mock 的稳定设计结论。
+- `design.md` 只承接会影响页面、交互、流程或 Mock 的**当前**稳定设计结论;决策记录、迭代历史、待确认项写入 `decisions.md`,不堆进 `design.md`。
 - `delivery/prd.md` 是领域 PRD 的单点权威源;版本 `release-prd` 从这里组装。
 - 如果某个材料只影响单领域的 demo 设计,直接更新 `design.md`,不单独留档。
 
@@ -46,16 +47,18 @@
 - `src/components/`:通用组件和布局
 - `src/styles/`:样式
 
-## 固定读取顺序
+## 读取顺序(按需分段,不整篇吞)
 
-1. `project/ui-brand.md`
-2. `project/overview.md`
-3. `project/domains/<domain>/design.md`
-4. 如需对外交付参考:`project/domains/<domain>/delivery/prd.md` 和 `delivery/test/*.md`
-5. 如当前任务涉及跨领域调研:`project/research/` 下相关版本文件
-6. 如当前任务涉及研发技术约束:`project/tech/` 下相关版本文件
-7. 如当前阶段是 `status` / `review` / `deliver`:按需读 `project/delivery/` 中已有版本产物
-8. 进入具体阶段后,再读取对应 canonical spec:
+先读紧凑的状态源,再**只按当前任务读相关小节**。除小文件(ui-brand / TASKS)外一律"先大纲后跳读":对大文档(如 `design.md`)先读顶部 `## 章节索引` 或 grep `^#` 拿标题,再用 Read offset/limit 只读相关小节;**不要每轮全文重读**。
+
+1. `project/TASKS.md` — 紧凑单一事实源,先读它掌握"现在在哪 / 下一步"(取代默认全读 design.md)。
+2. `project/ui-brand.md` — 项目级设计默认值(稳定、小,可整篇)。
+3. `project/domains/<domain>/design.md` — **只按任务读相关小节**(先章节索引 / grep `^#`,再 offset/limit 跳读),不整篇读。
+4. `project/domains/<domain>/decisions.md` — 仅当需要"为什么这样定 / 变过什么"时,按需读相关条目。
+5. 如需对外交付参考:`project/domains/<domain>/delivery/prd.md`、`delivery/test/*.md`,按需读相关条目。
+6. 如涉及跨领域调研 / 研发技术约束:`project/research/`、`project/tech/` 下相关版本文件,按需读。
+7. 如当前阶段是 `status` / `review` / `deliver`:按需读 `project/delivery/` 中已有版本产物。
+8. 进入具体阶段后,再读对应 canonical spec 的**相关小节**(不整篇吞):
    - `breakdown` -> `product-design-kit/design/design-init.md`
    - `design` -> `product-design-kit/design/product-design.md`
    - `build` -> `product-design-kit/coding/react-list-page.md`、`product-design-kit/coding/react-tabs-page.md`、`product-design-kit/coding/consistency.md`
@@ -68,7 +71,7 @@
 - 作为唯一阶段路由源维护阶段信号和切换规则
 - 调用合适的阶段 skill
 - 把产出写到正确位置:业务文档 -> `project/domains/<domain>/`,跨领域 -> 项目级目录,代码 -> `src/`
-- 同步更新 `project/overview.md`
+- 同步更新 `project/TASKS.md`(当前状态 / 最近动态 / 下一步);决策与迭代写入领域 `decisions.md`;`project/overview.md` 仅当项目地图(领域清单 / 入口)变化时才更新
 - 保持输出满足约定
 
 ## 领域识别规则
@@ -107,7 +110,7 @@
 ## 编排边界
 
 1. 规范只从 `product-design-kit/` 读取。
-2. 项目级默认设计规范只从 `project/ui-brand.md` 读取;运行时状态只从 `project/overview.md` 和 `project/domains/<domain>/` 读取。
+2. 项目级默认设计规范只从 `project/ui-brand.md` 读取;运行时状态(当前 / 下一步 / 最近动态)只从 `project/TASKS.md` 读取,`project/overview.md` 只作项目地图,决策/迭代史在领域 `decisions.md`。
 3. 不把 `README.md` 或其他人类说明文档作为阶段判定输入。
 4. 第一版只使用你自己和阶段 skills,不额外拆专项 agent。
 5. 如果业务领域目录不存在,初始化时**只**建 `design.md`(按需加 `delivery/`);不再建 `research.md` 或 `tech/`。

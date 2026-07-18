@@ -325,6 +325,61 @@
   background: var(--cf-bg-layout);
 }
 
+.cf-conv-view__history-hint,
+.cf-conv-view__history-loading {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--cf-text-tertiary);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.cf-conv-view__history-loading .anticon {
+  color: var(--cf-brand);
+}
+
+.cf-conv-view__history-collapse {
+  position: sticky;
+  top: var(--cf-spacing-2);
+  z-index: 2;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: #ebebeb;
+  border: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--cf-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #dcdcdc;
+
+    .cf-conv-view__history-action {
+      color: var(--cf-brand-hover, #06ad55);
+    }
+  }
+}
+
+.cf-conv-view__history-count {
+  font-family: SF Mono, Menlo, Monaco, monospace;
+}
+
+.cf-conv-view__history-action {
+  color: var(--cf-brand);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
 .cf-conv-view__composer {
   border-top: 1px solid var(--cf-border-light);
   padding: var(--cf-spacing-2) var(--cf-spacing-3);
@@ -360,6 +415,51 @@
   margin-top: 6px;
 }
 
+/* 跨轮次会话系统分割条 */
+// 分隔线两档层级:
+// - 日期:最轻,纯居中灰字,不加线不加底,退到背景;频繁出现故不抢视线。
+// - 会话边界(结束/重开/主动发起):全宽分割线 + 居中文案——会话在此断开,给最强的视觉分隔。
+.cf-msg-divider {
+  align-self: center;
+  max-width: 88%;
+  margin: var(--cf-spacing-1) 0;
+  text-align: center;
+
+  &__text {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--cf-text-tertiary);
+  }
+
+  // 自然日日期:纯居中灰字
+  &--date .cf-msg-divider__text {
+    color: var(--cf-text-tertiary);
+  }
+
+  // 会话生命周期边界:全宽分割线,两侧细横线夹居中文案
+  &--boundary {
+    align-self: stretch;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--cf-spacing-3);
+    margin: var(--cf-spacing-3) 0;
+
+    &::before,
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--cf-border-light);
+    }
+
+    .cf-msg-divider__text {
+      white-space: nowrap;
+      color: var(--cf-text-tertiary);
+    }
+  }
+}
+
 /* 消息气泡 */
 .cf-msg {
   display: flex;
@@ -386,12 +486,63 @@
 
 .cf-msg__time {
   font-family: SF Mono, Menlo, Monaco, monospace;
+  cursor: default;
+}
+
+// 悬停原地展开完整日期时间(替代 Tooltip)。
+// 热区放到整条消息(.cf-msg)上,悬停消息任意处即展开时间,避免只盯着小小的时间文本。
+.cf-msg__time-full {
+  display: none;
+}
+.cf-msg:hover .cf-msg__time-short {
+  display: none;
+}
+.cf-msg:hover .cf-msg__time-full {
+  display: inline;
 }
 
 .cf-msg__bubble-wrap {
   display: flex;
   align-items: flex-end;
   gap: 6px;
+}
+
+// 悬停在消息气泡上时出现的操作条(替代原右键菜单)。
+// 目前仅「撤回」一个图标,后续可在此追加更多消息级交互图标。
+.cf-msg__actions {
+  align-self: center;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.cf-msg__bubble-wrap:hover .cf-msg__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cf-msg__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: var(--cf-radius, 6px);
+  color: var(--cf-text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--cf-primary);
+  }
 }
 
 .cf-msg__bubble {
@@ -466,6 +617,176 @@
   background: var(--cf-bg-surface);
 }
 
+/* 图文合并气泡:图片网格 + 文件/视频卡片 + 文字同框 */
+.cf-msg__mixed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-spacing-2);
+  max-width: 300px;
+}
+
+.cf-msg__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  .cf-msg__image {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: zoom-in;
+  }
+}
+
+/* 图文气泡里文件/视频卡片限宽,竖排不撑破气泡 */
+.cf-msg__mixed .cf-msg__file {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cf-msg__mixed .cf-msg__video {
+  max-width: 100%;
+}
+
+.cf-msg__file-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cf-msg__file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-msg__text {
+  white-space: pre-wrap;
+}
+
+/* Composer 草稿附件预览条 */
+.cf-conv-view__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cf-conv-view__attach {
+  position: relative;
+}
+
+/* 图片缩略图为 64×64;文件/视频卡片自适应宽度 */
+.cf-conv-view__attach:not(.cf-conv-view__attach--file) {
+  width: 64px;
+  height: 64px;
+}
+
+.cf-conv-view__attach-videobtn {
+  position: relative;
+  display: block;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.cf-conv-view__attach-video {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #000;
+}
+
+.cf-conv-view__attach-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 22px;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.cf-conv-view__attach-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 64px;
+  padding: 0 10px;
+  min-width: 160px;
+  max-width: 240px;
+  border: 1px solid var(--cf-border);
+  border-radius: 6px;
+  background: var(--cf-bg-surface);
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--cf-primary);
+    background: var(--cf-primary-light);
+  }
+}
+
+.cf-conv-view__attach-icon {
+  font-size: 24px;
+  color: var(--cf-info);
+  flex-shrink: 0;
+}
+
+.cf-conv-view__attach-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cf-conv-view__attach-name {
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-conv-view__attach-size {
+  font-size: 11px;
+  color: var(--cf-text-tertiary);
+}
+
+.cf-conv-view__attach-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 10px;
+  cursor: pointer;
+  z-index: 2;
+
+  &:hover {
+    background: var(--cf-error);
+  }
+}
+
 /* Emoji picker */
 .cf-emoji-picker {
   display: grid;
@@ -512,14 +833,84 @@
   font-weight: 500;
 }
 
-.cf-aside__placeholder {
-  padding: var(--cf-spacing-2);
-  background: var(--cf-bg-layout);
-  border-radius: var(--cf-radius);
-  margin-bottom: var(--cf-spacing-3);
+.cf-text-tertiary {
+  color: var(--cf-text-tertiary);
+}
+
+/* 工作台 slot 精简档案(player-center D3-2) */
+.cf-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-spacing-3);
+}
+
+.cf-slot__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-spacing-2);
+}
+
+.cf-slot__identity-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cf-slot__nickname {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  min-width: 0;
+}
+
+.cf-slot__remark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cf-slot__remark-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-slot__remark-edit {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--cf-text-tertiary);
+  cursor: pointer;
+
+  &:hover {
+    color: #07c160;
+  }
+}
+
+.cf-slot__playerid {
+  font-family: 'SF Mono', Menlo, monospace;
   font-size: 12px;
 }
 
-.cf-text-tertiary {
+.cf-slot__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-spacing-1);
+}
+
+.cf-slot__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-spacing-1);
+  margin-bottom: var(--cf-spacing-2);
+}
+
+.cf-slot__label {
+  font-size: 12px;
   color: var(--cf-text-tertiary);
+}
+
+.cf-slot__footer {
+  padding-top: var(--cf-spacing-2);
+  border-top: 1px solid var(--cf-border-light);
 }

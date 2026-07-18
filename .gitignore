@@ -24,3 +24,7 @@ VIP-Starter.code-workspace
 *.njsproj
 *.sln
 *.sw?
+.obsidian/
+
+# Claude Code 诊断 / 本地临时文件
+claude-code-诊断.md

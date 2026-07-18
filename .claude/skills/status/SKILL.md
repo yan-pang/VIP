@@ -6,9 +6,9 @@ argument-hint: [optional-scope]
 
 # /status
 
-1. 先阅读 `project/overview.md` 和 `project/ui-brand.md`。
-2. 扫描项目级内容:`project/research/`、`project/tech/`、`project/delivery/`(按需逐个读取,不一次读全)。
-3. 如果给了具体领域,再优先阅读 `project/domains/<domain>/design.md`、`delivery/prd.md`(如存在)、`delivery/test/*.md`(如存在)。
+1. 先读 `project/TASKS.md`(现状 / 最近动态 / 下一步)与 `project/overview.md`(项目地图)、`project/ui-brand.md`。
+2. 扫描项目级内容:`project/research/`、`project/tech/`、`project/delivery/`(**按需逐个读取,不一次读全**)。
+3. 如果给了具体领域,再按需读 `project/domains/<domain>/design.md`(先章节索引再跳读)、`decisions.md`、`delivery/prd.md`(如存在)、`delivery/test/*.md`(如存在)的相关小节。
 4. 按"材料吸收、项目级调研、项目级研发设计、设计初始化、功能详细描述、项目品牌规范、实现、领域交付资产、版本对外交付"九个维度总结当前进度。
 5. 优先按领域汇总,并特别标出:
    - `project/research/` 中是否有新调研未同步到对应领域或 `delivery/`

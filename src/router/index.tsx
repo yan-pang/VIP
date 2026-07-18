@@ -5,6 +5,9 @@ const NavigationLayout = lazy(() => import('../components/layouts/NavigationLayo
 const WorkbenchPage = lazy(() => import('../views/workbench/WorkbenchPage'))
 const ControlPage = lazy(() => import('../views/control/ControlPage'))
 const ProjectCatalogPage = lazy(() => import('../views/catalog/ProjectCatalogPage'))
+const PlayersListPage = lazy(() => import('../views/players/PlayersListPage'))
+const PlayerDetailPage = lazy(() => import('../views/players/PlayerDetailPage'))
+const MessagesListPage = lazy(() => import('../views/messages/MessagesListPage'))
 
 const router = createHashRouter([
   {
@@ -26,6 +29,18 @@ const router = createHashRouter([
       {
         path: 'catalog',
         element: <ProjectCatalogPage />,
+      },
+      {
+        path: 'players',
+        element: <PlayersListPage />,
+      },
+      {
+        path: 'players/:playerId',
+        element: <PlayerDetailPage />,
+      },
+      {
+        path: 'messages',
+        element: <MessagesListPage />,
       },
     ],
   },

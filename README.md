@@ -46,7 +46,7 @@ project/domains/<domain>/
 
 ## 版本交付怎么走
 
-日常维护领域 PRD,发版时让 AI 基于 git diff 自动识别变更、组装 release-prd。
+日常维护领域 PRD,发版时让 AI 基于 git diff 识别变更,按 `product-design-kit/design/release-prd-spec.md` 从各单一事实源**组装**一份 release-prd(完整快照 + 本版变更摘要)。
 
 ### 工作流
 
@@ -56,7 +56,7 @@ project/domains/<domain>/
    - 对每个领域 `delivery/prd.md`,用 `git show <base>:<path>` 拿到 base 版本,按 `## P-XXX` 切分对比
    - 识别本版的新增 / 修订 / 废弃条目,按领域聚合
    - 把清单反向确认给你看
-3. **确认**后,AI 生成 `project/delivery/v1.1/release-prd.md` 和 `test-plan.md`,内容为完整条目摘录(自包含对外文档)
+3. **确认**后,AI 按 `release-prd-spec.md` 12 章结构生成 `project/delivery/v1.1/release-prd.md` 和 `test-plan.md`:§7 详细需求 = 完整摘录当前全部生效条目(快照),顶部「本版变更摘要」+ 条目状态标记标出本版改动。各章节从单一事实源组装(调研→`research/`、设计→`design.md`、需求→领域 PRD),不手写新增正文
 4. **打 tag**:`git tag release/v1.1`,作为下一版的 base
 
 ### 关键约束

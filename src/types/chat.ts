@@ -59,11 +59,12 @@ export interface Conversation {
   status: ConversationStatus
   /** 指派人 id;为 null 时会话必定在 queueing */
   assigneeId: string | null
-  /** 指派人历史(转接 / 隐式指派回滚都留痕) */
+  /** 指派人历史(显式指派 / 转接 / 玩家重新激活都留痕) */
   assigneeHistory: Array<{
     agentId: string | null
     changedAt: string
-    reason: 'explicit' | 'implicit_first_message' | 'transfer' | 'rollback' | 'reactivate'
+    // V1 取消隐式指派后:显式指派(含主动发起)/ 转接 / 玩家重新激活清空
+    reason: 'explicit' | 'transfer' | 'reactivate'
     /** 显式指派 / 转接时的内部备注(玩家不可见) */
     note?: string
   }>
@@ -82,14 +83,22 @@ export interface Conversation {
   playerHasDeletedFriendship: boolean
 }
 
-/** 消息发送方向 */
-export type MessageDirection = 'incoming' | 'outgoing'
+/** 消息发送方向。system 用于跨轮次会话的系统分割消息(结束 / 重新发起 / 主动发起) */
+export type MessageDirection = 'incoming' | 'outgoing' | 'system'
 
 /** 消息状态 */
 export type MessageStatus = 'sending' | 'sent' | 'failed'
 
-/** 消息内容类型 */
-export type MessageContentType = 'text' | 'image' | 'video' | 'file' | 'link' | 'emoji' | 'system'
+/** 消息内容类型。mixed 用于图文/多附件合并消息(文字 + 一个或多个附件同框) */
+export type MessageContentType = 'text' | 'image' | 'video' | 'file' | 'link' | 'emoji' | 'system' | 'mixed'
+
+/** 图文消息里的单个附件(客服可在草稿区攒多个,连同文字一次发出) */
+export interface MessageAttachment {
+  type: 'image' | 'video' | 'file'
+  url: string
+  name: string
+  sizeBytes: number
+}
 
 /** 失败原因分类(决定 UI 展示行为) */
 export type FailureCategory =
@@ -122,10 +131,12 @@ export interface Message {
   contentType: MessageContentType
   /** 文本消息正文 */
   text?: string
-  /** 媒体 URL */
+  /** 媒体 URL(单媒体消息;图文合并消息改用 attachments) */
   mediaUrl?: string
   mediaName?: string
   mediaSizeBytes?: number
+  /** 图文/多附件合并消息的附件列表(与 text 同框展示) */
+  attachments?: MessageAttachment[]
   /** 发送方 id(客服 id 或玩家 id) */
   senderId: string
   /** 创建时间(玩家发送 / 客服点发送) */
@@ -146,5 +157,11 @@ export interface ForbiddenWordHit {
   end: number
 }
 
-/** 会话分组(左列折叠用) */
-export type ConversationGroupKey = 'queueing' | 'active' | 'ended'
+/**
+ * 会话分组(左列折叠用)
+ * - queueing 排队中(指派人为空)
+ * - active 会话中:仅**指派给当前客服**的进行中会话(只有这些能发消息)
+ * - assigned_other 他人接待中:进行中但指派人是其他客服,只读查看,不放进"会话中"
+ * - ended 已结束
+ */
+export type ConversationGroupKey = 'queueing' | 'active' | 'assigned_other' | 'ended'

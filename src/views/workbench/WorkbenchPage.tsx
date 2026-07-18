@@ -14,16 +14,59 @@ import {
   simulateSendOutcome,
   wechatAccounts,
 } from '../../services/chatflowMock'
-import type { Conversation, ConversationTag, Message } from '../../types/chat'
+import type { Conversation, ConversationTag, Message, MessageAttachment } from '../../types/chat'
+import {
+  SEED_CONV_IDS,
+  loadProactivePersisted,
+  makeConversationId,
+  saveProactivePersisted,
+} from '../../services/proactiveStore'
 import '../../styles/Workbench.scss'
+
+function formatStamp(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function makeSystemMessage(
+  conversationId: string,
+  text: string,
+  iso: string,
+  suffix = 'sys',
+): Message {
+  return {
+    id: `m_sys_${Date.now()}_${suffix}`,
+    conversationId,
+    direction: 'system',
+    contentType: 'system',
+    text,
+    senderId: 'system',
+    createdAt: iso,
+    status: 'sent',
+  }
+}
 
 function WorkbenchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { openSearch } = useOutletContext<ShellOutletContext>()
 
-  const [conversations, setConversations] = useState<Conversation[]>(conversationsSeed)
-  const [messages, setMessages] = useState<Message[]>(messagesSeed)
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    const { conversations: persisted } = loadProactivePersisted()
+    // 已落库的主动发起会话置前(lastMessageAt 较新),seed 在后
+    return [...persisted.filter((c) => !SEED_CONV_IDS.has(c.id)), ...conversationsSeed]
+  })
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const { messages: persisted } = loadProactivePersisted()
+    const seedMsgIds = new Set(messagesSeed.map((m) => m.id))
+    return [...messagesSeed, ...persisted.filter((m) => !seedMsgIds.has(m.id))]
+  })
+
+  // 主动发起会话落库后持久化(刷新保留);占位未发送 / 失败的不写入
+  useEffect(() => {
+    saveProactivePersisted(conversations, messages)
+  }, [conversations, messages])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // 多选筛选:默认勾选全部企微号 = 不筛选
@@ -42,18 +85,101 @@ function WorkbenchPage() {
   const liveRef = useRef({ conversations, selectedId })
   liveRef.current = { conversations, selectedId }
 
-  // 接收 URL query 跳转(来自搜索面板 / 控制台)
+  // 主动发起占位幂等:记住本次挂载已为某 (playerId::accountId) 创建的会话 id。
+  // 会话 ID 改为每次唯一后,StrictMode 下 effect 双调用会各生成一个 id,
+  // 必须按 (玩家×企微号) 去重,否则同一次主动发起会建出两条占位。
+  const proactiveCreatedRef = useRef<Map<string, string>>(new Map())
+
+  // 接收 URL query 跳转(来自搜索面板 / 控制台 / 玩家中心)
   useEffect(() => {
     const cid = searchParams.get('conversationId')
-    if (cid && conversations.find((c) => c.id === cid)) {
-      setSelectedId(cid)
-      // 清掉 query 防止重复跳
-      const next = new URLSearchParams(searchParams)
-      next.delete('conversationId')
-      next.delete('messageId')
-      setSearchParams(next, { replace: true })
-    }
+    const pid = searchParams.get('playerId')
     const acc = searchParams.get('accountId')
+
+    // ① 已存在会话定位(来自玩家中心 / 消息管理"去工作台接待" / 搜索面板)
+    //    定位会话;若该会话已结束,则与玩家中心入口一致 —— 自动进入主动发起态(输入区解锁可直接接待)。
+    {
+      const target = cid ? conversations.find((c) => c.id === cid) : undefined
+      if (target) {
+        setSelectedId(target.id)
+        if (target.status === 'ended') {
+          setReactivatingIds((prev) => {
+            if (prev.has(target.id)) return prev
+            const nextSet = new Set(prev)
+            nextSet.add(target.id)
+            return nextSet
+          })
+        }
+        const next = new URLSearchParams(searchParams)
+        next.delete('conversationId')
+        next.delete('messageId')
+        setSearchParams(next, { replace: true })
+        return
+      }
+    }
+
+    // ② 玩家中心"主动发起":带 playerId + accountId。
+    //    无会话 → 创建会话占位,以"会话中"(active)状态 + 指派当前客服显示,
+    //      落在左列"会话中"分组、有选中态、按 lastMessageAt 排在非置顶最前(即发起时间)。
+    //      首条消息发送成功 = 已送达;失败 = 消息红标可重发(会话保留,不撤销)。刷新页面占位消失。
+    //    有会话 → 定位(已结束自动进主动发起态)。
+    if (pid && acc) {
+      const existing = conversations.find((c) => c.playerId === pid && c.accountId === acc)
+      if (existing) {
+        setSelectedId(existing.id)
+        if (existing.status === 'ended') {
+          setReactivatingIds((prev) => {
+            if (prev.has(existing.id)) return prev
+            const nextSet = new Set(prev)
+            nextSet.add(existing.id)
+            return nextSet
+          })
+        }
+      } else {
+        const key = `${pid}::${acc}`
+        const alreadyCreated = proactiveCreatedRef.current.get(key)
+        if (alreadyCreated) {
+          // StrictMode effect 双调用 / 依赖重跑:本次挂载已建过该占位,直接选中,不重复创建
+          setSelectedId(alreadyCreated)
+        } else {
+          const now = new Date().toISOString()
+          const placeholderId = makeConversationId(conversations)
+          proactiveCreatedRef.current.set(key, placeholderId)
+          const placeholder: Conversation = {
+            id: placeholderId,
+            accountId: acc,
+            playerId: pid,
+            status: 'active',
+            assigneeId: currentAgentId,
+            assigneeHistory: [
+              { agentId: currentAgentId, changedAt: now, reason: 'explicit', note: '客服主动发起' },
+            ],
+            pinned: false,
+            tags: [],
+            unreadCount: 0,
+            lastMessagePreview: '(主动发起会话,待发送首条消息)',
+            lastMessageAt: now,
+            createdAt: now,
+            playerHasDeletedFriendship: false,
+          }
+          setConversations((prev) =>
+            prev.some((c) => c.playerId === pid && c.accountId === acc)
+              ? prev
+              : [placeholder, ...prev],
+          )
+          setSelectedId(placeholderId)
+        }
+      }
+      // 把对应企微号纳入筛选可见集合(避免被 accountFilter 过滤掉)
+      setAccountFilter((prev) => (prev.includes(acc) ? prev : [...prev, acc]))
+      const next = new URLSearchParams(searchParams)
+      next.delete('playerId')
+      next.delete('accountId')
+      setSearchParams(next, { replace: true })
+      return
+    }
+
+    // ③ 仅 accountId(来自控制台 focus):设企微号筛选
     if (acc) {
       setAccountFilter([acc])
       const next = new URLSearchParams(searchParams)
@@ -103,9 +229,22 @@ function WorkbenchPage() {
       const text = incomingPool[Math.floor(Math.random() * incomingPool.length)]
       const now = new Date().toISOString()
       const msgId = `m_${Date.now()}_in`
-      setMessages((prev) => [
-        ...prev,
-        {
+      const wasEnded = conv.status === 'ended'
+      setMessages((prev) => {
+        const next = [...prev]
+        // 已结束被玩家重新激活 → 在新消息前插入系统分割条
+        if (wasEnded) {
+          const sysAt = new Date(new Date(now).getTime() - 1000).toISOString()
+          next.push(
+            makeSystemMessage(
+              conv.id,
+              `玩家于 ${formatStamp(now)} 重新发起会话`,
+              sysAt,
+              'reopen',
+            ),
+          )
+        }
+        next.push({
           id: msgId,
           conversationId: conv.id,
           direction: 'incoming',
@@ -114,8 +253,9 @@ function WorkbenchPage() {
           senderId: conv.playerId,
           createdAt: now,
           status: 'sent',
-        },
-      ])
+        })
+        return next
+      })
       setConversations((prev) =>
         prev.map((c) => {
           if (c.id !== conv.id) return c
@@ -172,13 +312,19 @@ function WorkbenchPage() {
 
   const handleEndConv = useCallback(
     (id: string) => {
-      updateConv(id, { status: 'ended', lastMessagePreview: '会话已结束' })
+      const now = new Date().toISOString()
+      // 结束只改状态:左列预览保留最后一条真实消息,不覆盖成"会话已结束"(已结束语义由分组 + 会话内系统分隔条体现)
+      updateConv(id, { status: 'ended' })
       setReactivatingIds((prev) => {
         if (!prev.has(id)) return prev
         const next = new Set(prev)
         next.delete(id)
         return next
       })
+      setMessages((prev) => [
+        ...prev,
+        makeSystemMessage(id, `本次会话已结束 · ${formatStamp(now)}`, now, 'end'),
+      ])
     },
     [updateConv],
   )
@@ -249,58 +395,42 @@ function WorkbenchPage() {
   const handleSendMessage = useCallback(
     (
       conversationId: string,
-      payload:
-        | { type: 'text'; text: string }
-        | { type: 'image' | 'video' | 'file'; mediaUrl: string; mediaName: string; mediaSizeBytes: number },
+      payload: { text?: string; attachments?: MessageAttachment[] },
     ) => {
       const conv = conversations.find((c) => c.id === conversationId)
       if (!conv) return
+      const text = payload.text?.trim() || undefined
+      const attachments = payload.attachments?.length ? payload.attachments : undefined
+      if (!text && !attachments) return
 
       const now = new Date().toISOString()
+      // V1 取消隐式指派:排队中会话不渲染输入区,能走到这里发消息的会话
+      // 必然是「已指派给自己的会话中」或「已结束的主动发起态」,发送前不再改指派人。
       // 主动发起态(已结束 + 客服点过"主动发起会话"):状态机和指派人不在发送前变更,
       // 只有发送成功后才改 active + 指派给当前客服。
       const isProactiveReactivate =
         conv.status === 'ended' && reactivatingIds.has(conversationId)
-      const isImplicitFirst = !isProactiveReactivate && conv.assigneeId === null
 
-      // 隐式指派同步发生(仅 queueing 路径)
-      if (isImplicitFirst) {
-        updateConv(conversationId, {
-          assigneeId: currentAgentId,
-          status: 'active',
-          assigneeHistory: [
-            ...conv.assigneeHistory,
-            { agentId: currentAgentId, changedAt: now, reason: 'implicit_first_message' },
-          ],
-        })
-      }
-
-      // 追加 sending 消息
+      // 追加 sending 消息(一条图文:text + attachments 同框)
       const msgId = `m_${Date.now()}`
-      const sendingMsg: Message =
-        payload.type === 'text'
-          ? {
-              id: msgId,
-              conversationId,
-              direction: 'outgoing',
-              contentType: 'text',
-              text: payload.text,
-              senderId: currentAgentId,
-              createdAt: now,
-              status: 'sending',
-            }
-          : {
-              id: msgId,
-              conversationId,
-              direction: 'outgoing',
-              contentType: payload.type,
-              mediaUrl: payload.mediaUrl,
-              mediaName: payload.mediaName,
-              mediaSizeBytes: payload.mediaSizeBytes,
-              senderId: currentAgentId,
-              createdAt: now,
-              status: 'sending',
-            }
+      // contentType:仅文字→text;仅单附件→该附件 type;有文字+附件 或 多附件→mixed
+      const contentType: Message['contentType'] =
+        !attachments
+          ? 'text'
+          : !text && attachments.length === 1
+            ? attachments[0].type
+            : 'mixed'
+      const sendingMsg: Message = {
+        id: msgId,
+        conversationId,
+        direction: 'outgoing',
+        contentType,
+        text,
+        attachments,
+        senderId: currentAgentId,
+        createdAt: now,
+        status: 'sending',
+      }
       setMessages((prev) => [...prev, sendingMsg])
 
       // 1-1.5s 后随机决定结果
@@ -318,25 +448,6 @@ function WorkbenchPage() {
               : m,
           ),
         )
-
-        // 隐式指派首条失败 → 回滚
-        if (outcome.status === 'failed' && isImplicitFirst) {
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === conversationId
-                ? {
-                    ...c,
-                    assigneeId: null,
-                    status: 'queueing',
-                    assigneeHistory: [
-                      ...c.assigneeHistory,
-                      { agentId: null, changedAt: new Date().toISOString(), reason: 'rollback' },
-                    ],
-                  }
-                : c,
-            ),
-          )
-        }
 
         // 主动发起态:发送成功才把会话从 ended 切到 active 并指派给当前客服;失败保持 ended
         if (isProactiveReactivate && outcome.status === 'sent') {
@@ -357,6 +468,17 @@ function WorkbenchPage() {
                 : c,
             ),
           )
+          // 在主动发起的首条消息之前(now - 2s)插入系统分割条
+          const sysAt = new Date(new Date(now).getTime() - 2000).toISOString()
+          setMessages((prev) => [
+            ...prev,
+            makeSystemMessage(
+              conversationId,
+              `客服于 ${formatStamp(ts)} 主动发起会话`,
+              sysAt,
+              'proactive',
+            ),
+          ])
           clearReactivating(conversationId)
         }
 
@@ -369,14 +491,18 @@ function WorkbenchPage() {
         }
 
         // 更新会话 lastMessagePreview
-        const preview =
-          payload.type === 'text'
-            ? payload.text.slice(0, 20)
-            : payload.type === 'image'
-              ? '[图片]'
-              : payload.type === 'video'
-                ? '[视频]'
-                : `[文件] ${payload.mediaName}`
+        const attachPreview = attachments
+          ? text
+            ? '[图文]'
+            : attachments.length > 1
+              ? '[图文]'
+              : attachments[0].type === 'image'
+                ? '[图片]'
+                : attachments[0].type === 'video'
+                  ? '[视频]'
+                  : `[文件] ${attachments[0].name}`
+          : null
+        const preview = text ? text.slice(0, 20) : attachPreview ?? ''
         updateConv(conversationId, {
           lastMessagePreview: preview,
           lastMessageAt: new Date().toISOString(),
@@ -417,6 +543,7 @@ function WorkbenchPage() {
         <ConversationList
           conversations={visibleConversations}
           selectedId={selectedId}
+          currentAgentId={currentAgentId}
           accountFilter={accountFilter}
           onSelect={handleSelectConv}
           onAccountFilterChange={(next) => {
@@ -426,7 +553,6 @@ function WorkbenchPage() {
               setSelectedId(null)
             }
           }}
-          onTogglePin={handleTogglePin}
           onOpenSearch={openSearch}
         />
       </aside>

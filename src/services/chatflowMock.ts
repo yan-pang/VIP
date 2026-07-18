@@ -14,7 +14,7 @@ import type {
 export const currentAgentId = 'agent_self'
 
 export const agents: Agent[] = [
-  { id: 'agent_self', name: '我自己', online: true, activeConversationCount: 4 },
+  { id: 'agent_self', name: '林悦', online: true, activeConversationCount: 4 },
   { id: 'agent_zhang', name: '张三', online: true, activeConversationCount: 5 },
   { id: 'agent_li', name: '李四', online: true, activeConversationCount: 12 },
   { id: 'agent_wang', name: '王五', online: false, activeConversationCount: 0 },
@@ -81,6 +81,28 @@ export const players: Player[] = [
     remark: '老客',
     associatedAccountIds: ['wx_xiaoqin'],
   },
+  // 以下 4 人由 player-center 领域引入(覆盖关系状态三态);两域共享同一份玩家集合,
+  // 保证从玩家中心"主动发起"跳工作台时能正确显示昵称。associatedAccountIds 对齐 playerCenterMock 关系 seed。
+  {
+    id: 'p_axian',
+    nickname: '阿弦',
+    associatedAccountIds: ['wx_xiaoqin', 'wx_xiaojuan'],
+  },
+  {
+    id: 'p_dahai',
+    nickname: '大海',
+    associatedAccountIds: ['wx_xiaoqin', 'wx_xiaobei', 'wx_xiaojuan'],
+  },
+  {
+    id: 'p_xiaowu',
+    nickname: '小武',
+    associatedAccountIds: ['wx_xiaobei'],
+  },
+  {
+    id: 'p_kaikai',
+    nickname: '凯凯',
+    associatedAccountIds: ['wx_xiaoqin'],
+  },
 ]
 
 export const conversations: Conversation[] = [
@@ -107,13 +129,17 @@ export const conversations: Conversation[] = [
     playerId: 'p_xiaolin',
     status: 'queueing',
     assigneeId: null,
-    assigneeHistory: [],
+    // 历史轮次:5/14 由林悦接过一次,玩家结束后 5/18 重新发起,当前再次进入排队中
+    assigneeHistory: [
+      { agentId: 'agent_self', changedAt: '2026-05-14T10:05:00+08:00', reason: 'explicit' },
+      { agentId: null, changedAt: '2026-05-14T18:00:00+08:00', reason: 'reactivate' },
+    ],
     pinned: false,
     tags: [],
     unreadCount: 1,
     lastMessagePreview: '在吗 我充值后没到账',
     lastMessageAt: '2026-05-18T15:38:00+08:00',
-    createdAt: '2026-05-18T15:38:00+08:00',
+    createdAt: '2026-05-14T10:00:00+08:00',
     playerHasDeletedFriendship: false,
   },
   {
@@ -123,7 +149,7 @@ export const conversations: Conversation[] = [
     status: 'active',
     assigneeId: 'agent_self',
     assigneeHistory: [
-      { agentId: 'agent_self', changedAt: '2026-05-18T11:20:00+08:00', reason: 'implicit_first_message' },
+      { agentId: 'agent_self', changedAt: '2026-05-18T11:20:00+08:00', reason: 'explicit' },
     ],
     pinned: false,
     tags: [],
@@ -162,7 +188,7 @@ export const conversations: Conversation[] = [
     pinned: false,
     tags: [],
     unreadCount: 0,
-    lastMessagePreview: '会话已结束',
+    lastMessagePreview: '上次问题处理好了吗?',
     lastMessageAt: '2026-05-17T16:30:00+08:00',
     createdAt: '2026-05-17T15:30:00+08:00',
     playerHasDeletedFriendship: true,
@@ -268,7 +294,47 @@ export const messages: Message[] = [
     status: 'sent',
   },
 
-  // c_002 主线:玩家发但还没人指派
+  // c_002 主线:玩家多轮会话(5/14 一轮 + 5/18 重开)— 演示历史分割条
+  {
+    id: 'm_2000a',
+    conversationId: 'c_002',
+    direction: 'incoming',
+    contentType: 'text',
+    text: '上次活动券我领到了,谢谢',
+    senderId: 'p_xiaolin',
+    createdAt: '2026-05-14T10:00:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_2000b',
+    conversationId: 'c_002',
+    direction: 'outgoing',
+    contentType: 'text',
+    text: '不客气,有需要随时找我',
+    senderId: 'agent_self',
+    createdAt: '2026-05-14T10:05:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_2000c',
+    conversationId: 'c_002',
+    direction: 'system',
+    contentType: 'system',
+    text: '本次会话已结束 · 2026-05-14 18:00',
+    senderId: 'system',
+    createdAt: '2026-05-14T18:00:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_2000d',
+    conversationId: 'c_002',
+    direction: 'system',
+    contentType: 'system',
+    text: '玩家于 2026-05-18 15:38 重新发起会话',
+    senderId: 'system',
+    createdAt: '2026-05-18T15:37:30+08:00',
+    status: 'sent',
+  },
   {
     id: 'm_2001',
     conversationId: 'c_002',
@@ -384,7 +450,7 @@ export const messages: Message[] = [
     status: 'sent',
   },
 
-  // c_005 主线:删好友失败
+  // c_005 主线:删好友失败 + 结束分割
   {
     id: 'm_5001',
     conversationId: 'c_005',
@@ -400,6 +466,16 @@ export const messages: Message[] = [
       message: '玩家已删好友,后续消息无法送达',
       executedAt: '2026-05-17T16:30:00+08:00',
     },
+  },
+  {
+    id: 'm_5002',
+    conversationId: 'c_005',
+    direction: 'system',
+    contentType: 'system',
+    text: '本次会话已结束 · 2026-05-17 16:35',
+    senderId: 'system',
+    createdAt: '2026-05-17T16:35:00+08:00',
+    status: 'sent',
   },
 
   // c_001 追加:违禁词后端兜底拦截样例
@@ -449,6 +525,16 @@ export const messages: Message[] = [
     text: '感谢咨询,有需要随时找我',
     senderId: 'agent_self',
     createdAt: '2026-05-16T11:20:00+08:00',
+    status: 'sent',
+  },
+  {
+    id: 'm_6004',
+    conversationId: 'c_006',
+    direction: 'system',
+    contentType: 'system',
+    text: '本次会话已结束 · 2026-05-16 11:25',
+    senderId: 'system',
+    createdAt: '2026-05-16T11:25:00+08:00',
     status: 'sent',
   },
 ]

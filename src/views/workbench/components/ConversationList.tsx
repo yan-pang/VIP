@@ -1,49 +1,67 @@
 import { CaretDownOutlined, CaretRightOutlined, FilterOutlined, PushpinFilled, SearchOutlined, StarFilled } from '@ant-design/icons'
-import { Avatar, Badge, Checkbox, Divider, Dropdown, Empty, Popover, Tooltip } from 'antd'
-import { useState } from 'react'
+import { Avatar, Badge, Checkbox, Divider, Empty, Popover, Tooltip } from 'antd'
+import { useEffect, useState } from 'react'
 import type { Conversation, ConversationGroupKey } from '../../../types/chat'
 import { findPlayer, wechatAccounts } from '../../../services/chatflowMock'
+import { getRelation, subscribePlayerCenter } from '../../../services/playerCenterMock'
 
 interface Props {
   conversations: Conversation[]
   selectedId: string | null
+  currentAgentId: string
   accountFilter: string[]
   onSelect: (id: string) => void
   onAccountFilterChange: (next: string[]) => void
-  onTogglePin: (id: string) => void
   onOpenSearch: () => void
 }
 
-const groupOrder: ConversationGroupKey[] = ['queueing', 'active', 'ended']
+const groupOrder: ConversationGroupKey[] = ['queueing', 'active', 'assigned_other', 'ended']
 const groupLabel: Record<ConversationGroupKey, string> = {
   queueing: '排队中',
   active: '会话中',
+  assigned_other: '他人接待中',
   ended: '已结束',
+}
+
+/**
+ * 计算会话的左列分组:进行中会话按指派人拆分 ——
+ * 指派给自己 → 会话中(能发消息),指派给他人 → 他人接待中(只读)。
+ */
+function groupKeyOf(c: Conversation, currentAgentId: string): ConversationGroupKey {
+  if (c.status === 'active') {
+    return c.assigneeId === currentAgentId ? 'active' : 'assigned_other'
+  }
+  return c.status // 'queueing' | 'ended'
 }
 
 function ConversationList({
   conversations,
   selectedId,
+  currentAgentId,
   accountFilter,
   onSelect,
   onAccountFilterChange,
-  onTogglePin,
   onOpenSearch,
 }: Props) {
-  // 默认:排队中 / 会话中 展开,已结束 折叠
+  // 默认:排队中 / 会话中 展开,他人接待中 / 已结束 折叠
   const [collapsed, setCollapsed] = useState<Record<ConversationGroupKey, boolean>>({
     queueing: false,
     active: false,
+    assigned_other: true,
     ended: true,
   })
+  // 订阅 player-center 广播:slot / 详情页改备注后,会话卡的备注实时刷新
+  const [, setVersion] = useState(0)
+  useEffect(() => subscribePlayerCenter(() => setVersion((v) => v + 1)), [])
 
   const grouped: Record<ConversationGroupKey, Conversation[]> = {
     queueing: [],
     active: [],
+    assigned_other: [],
     ended: [],
   }
 
-  conversations.forEach((c) => grouped[c.status].push(c))
+  conversations.forEach((c) => grouped[groupKeyOf(c, currentAgentId)].push(c))
   groupOrder.forEach((k) =>
     grouped[k].sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
@@ -138,7 +156,6 @@ function ConversationList({
                       conversation={c}
                       selected={c.id === selectedId}
                       onClick={() => onSelect(c.id)}
-                      onTogglePin={() => onTogglePin(c.id)}
                     />
                   ))
                 )
@@ -184,66 +201,49 @@ function ConversationCard({
   conversation,
   selected,
   onClick,
-  onTogglePin,
 }: {
   conversation: Conversation
   selected: boolean
   onClick: () => void
-  onTogglePin: () => void
 }) {
   const player = findPlayer(conversation.playerId)
-  const displayName = player?.remark ?? player?.nickname ?? '未知玩家'
+  // 备注取关系级(playerId × accountId,player-center 权威源),回落微信昵称
+  const relationRemark = getRelation(conversation.playerId, conversation.accountId)?.remark?.trim()
+  const displayName = relationRemark || player?.nickname || '未知玩家'
   const time = conversation.lastMessageAt ? formatTime(conversation.lastMessageAt) : ''
   const hasMeta = conversation.pinned || conversation.tags.includes('important')
 
+  // 会话卡片不再提供右键菜单;置顶 / 标记走中列标题栏操作条
   return (
-    <Dropdown
-      trigger={['contextMenu']}
-      menu={{
-        items: [
-          {
-            key: 'pin',
-            label: conversation.pinned ? '取消置顶' : '置顶',
-            onClick: onTogglePin,
-          },
-          {
-            key: 'copy-name',
-            label: '复制玩家昵称',
-            onClick: () => navigator.clipboard?.writeText(displayName),
-          },
-        ],
-      }}
+    <button
+      type="button"
+      className={`cf-conv-card ${selected ? 'is-selected' : ''} ${conversation.pinned ? 'is-pinned' : ''}`}
+      onClick={onClick}
     >
-      <button
-        type="button"
-        className={`cf-conv-card ${selected ? 'is-selected' : ''} ${conversation.pinned ? 'is-pinned' : ''}`}
-        onClick={onClick}
-      >
-        <Avatar size={36} style={{ background: '#95E1B5' }}>
-          {displayName.slice(0, 1)}
-        </Avatar>
-        <div className="cf-conv-card__body">
-          <div className="cf-conv-card__row">
-            <span className="cf-conv-card__name">{displayName}</span>
-            <span className="cf-conv-card__time">{time}</span>
-          </div>
-          <div className="cf-conv-card__row">
-            <span className="cf-conv-card__preview">{conversation.lastMessagePreview}</span>
-            <Badge count={conversation.unreadCount} size="small" />
-          </div>
-          {hasMeta && (
-            <div className="cf-conv-card__meta">
-              {conversation.pinned && (
-                <PushpinFilled style={{ color: '#FAAD14', fontSize: 12 }} />
-              )}
-              {conversation.tags.includes('important') && (
-                <StarFilled style={{ color: '#FF4D4F', fontSize: 12 }} />
-              )}
-            </div>
-          )}
+      <Avatar size={36} style={{ background: '#95E1B5' }}>
+        {displayName.slice(0, 1)}
+      </Avatar>
+      <div className="cf-conv-card__body">
+        <div className="cf-conv-card__row">
+          <span className="cf-conv-card__name">{displayName}</span>
+          <span className="cf-conv-card__time">{time}</span>
         </div>
-      </button>
-    </Dropdown>
+        <div className="cf-conv-card__row">
+          <span className="cf-conv-card__preview">{conversation.lastMessagePreview}</span>
+          <Badge count={conversation.unreadCount} size="small" />
+        </div>
+        {hasMeta && (
+          <div className="cf-conv-card__meta">
+            {conversation.pinned && (
+              <PushpinFilled style={{ color: '#FAAD14', fontSize: 12 }} />
+            )}
+            {conversation.tags.includes('important') && (
+              <StarFilled style={{ color: '#FF4D4F', fontSize: 12 }} />
+            )}
+          </div>
+        )}
+      </div>
+    </button>
   )
 }
 

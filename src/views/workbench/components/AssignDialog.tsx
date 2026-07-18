@@ -17,7 +17,8 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
 
   const candidates = useMemo(() => {
     if (!state) return []
-    let list = agents
+    // 离线客服不支持转接/指派,候选列表只保留在线客服
+    let list = agents.filter((a) => a.online)
     if (state.mode === 'transfer') {
       list = list.filter((a) => a.id !== currentAgentId)
     }
@@ -30,7 +31,6 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
         if (a.id === currentAgentId) return -1
         if (b.id === currentAgentId) return 1
       }
-      if (a.online !== b.online) return a.online ? -1 : 1
       return a.activeConversationCount - b.activeConversationCount
     })
   }, [agents, currentAgentId, keyword, state])
@@ -87,7 +87,7 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
                     checked={selectedId === a.id}
                     readOnly
                   />
-                  <Badge dot color={a.online ? '#52C41A' : '#8C8C8C'} offset={[-3, 30]}>
+                  <Badge dot color="#52C41A" offset={[-3, 30]}>
                     <Avatar size={28} style={{ background: '#95E1B5' }}>
                       {a.name.slice(0, 1)}
                     </Avatar>
@@ -96,7 +96,6 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
                   {state?.mode === 'assign' && a.id === currentAgentId && (
                     <Tag color="green">推荐</Tag>
                   )}
-                  {!a.online && <Tag>离线</Tag>}
                 </Space>
                 <span className="cf-text-tertiary">会话量 {a.activeConversationCount}</span>
               </button>

@@ -5,7 +5,7 @@ import {
   PoweroffOutlined,
   ScanOutlined,
 } from '@ant-design/icons'
-import { Avatar, Badge, Button, Dropdown, Empty, Modal, Space, message as antMessage } from 'antd'
+import { Avatar, Badge, Button, Empty, Modal, Space, message as antMessage } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { wechatAccounts } from '../../services/chatflowMock'
@@ -116,43 +116,28 @@ function ControlPage() {
         <aside className="cf-control__left">
           <div className="cf-control__list">
             {accounts.map((a) => (
-              <Dropdown
+              // 号卡片不再提供右键菜单;重新登录 / 删除号统一走主体底部控制条
+              <button
                 key={a.id}
-                trigger={['contextMenu']}
-                menu={{
-                  items: [
-                    { key: 'relogin', label: '重新登录', onClick: () => handleRelogin(a.id) },
-                    { type: 'divider' },
-                    {
-                      key: 'delete',
-                      label: '删除号',
-                      danger: true,
-                      onClick: () => handleDelete(a.id),
-                    },
-                  ],
+                type="button"
+                className={`cf-control__card ${a.id === selectedId ? 'is-selected' : ''}`}
+                onClick={() => {
+                  setSelectedId(a.id)
+                  setViewMode('monitor')
                 }}
               >
-                <button
-                  type="button"
-                  className={`cf-control__card ${a.id === selectedId ? 'is-selected' : ''}`}
-                  onClick={() => {
-                    setSelectedId(a.id)
-                    setViewMode('monitor')
-                  }}
-                >
-                  <Badge dot color={statusColor[a.status]} offset={[-4, 32]}>
-                    <Avatar size={36} style={{ background: avatarColor(a.id), fontSize: 14 }}>
-                      {a.shortName.slice(0, 1)}
-                    </Avatar>
-                  </Badge>
-                  <div className="cf-control__card-body">
-                    <div className="cf-control__card-name">{a.shortName}</div>
-                    <div className="cf-control__card-meta">
-                      <span style={{ color: statusColor[a.status] }}>{statusLabel[a.status]}</span>
-                    </div>
+                <Badge dot color={statusColor[a.status]} offset={[-4, 32]}>
+                  <Avatar size={36} style={{ background: avatarColor(a.id), fontSize: 14 }}>
+                    {a.shortName.slice(0, 1)}
+                  </Avatar>
+                </Badge>
+                <div className="cf-control__card-body">
+                  <div className="cf-control__card-name">{a.shortName}</div>
+                  <div className="cf-control__card-meta">
+                    <span style={{ color: statusColor[a.status] }}>{statusLabel[a.status]}</span>
                   </div>
-                </button>
-              </Dropdown>
+                </div>
+              </button>
             ))}
           </div>
           <div className="cf-control__add">

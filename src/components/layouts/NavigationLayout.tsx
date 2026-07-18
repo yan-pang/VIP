@@ -13,6 +13,8 @@ export interface ShellOutletContext {
 const tabs: Array<{ key: string; label: string; path: string }> = [
   { key: 'workbench', label: '工作台', path: '/workbench' },
   { key: 'control', label: '控制台', path: '/control' },
+  { key: 'players', label: '玩家管理', path: '/players' },
+  { key: 'messages', label: '消息管理', path: '/messages' },
 ]
 
 function NavigationLayout() {
@@ -21,7 +23,13 @@ function NavigationLayout() {
   const me = findAgent(currentAgentId)
   const [searchOpen, setSearchOpen] = useState(false)
 
-  const activeKey = location.pathname.startsWith('/control') ? 'control' : 'workbench'
+  const activeKey = location.pathname.startsWith('/control')
+    ? 'control'
+    : location.pathname.startsWith('/players')
+      ? 'players'
+      : location.pathname.startsWith('/messages')
+        ? 'messages'
+        : 'workbench'
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
