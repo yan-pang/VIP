@@ -21,8 +21,8 @@ import type {
   TagDef,
 } from '../types/playerCenter'
 import type { Conversation, Message } from '../types/chat'
-import { conversations, findAccount, messages, players } from './chatflowMock'
-import { loadProactivePersisted } from './proactiveStore'
+import { findAccount, players } from './chatflowMock'
+import { getWorkbenchRuntime } from './workbenchRuntimeMock'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 标签库(标签 + 分组;deprecated 样例供边界场景演示)
@@ -40,10 +40,10 @@ export const tagLibrary: TagDef[] = [
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 真人档案:统一来自 chatflowMock.players(含 player-center 引入的 4 人),只补 customNote
+// 真人身份唯一来自 chatflowMock.players；本领域只保存性别与自定义信息扩展，避免复制昵称/头像。
 // ─────────────────────────────────────────────────────────────────────────────
 
-const profiles: Record<string, PlayerProfile> = {}
+const profileDetails: Record<string, Pick<PlayerProfile, 'gender' | 'customNote'>> = {}
 
 // 微信性别(企微好友资料;缺省 unknown)
 const genderSeed: Record<string, PlayerProfile['gender']> = {
@@ -60,30 +60,27 @@ const genderSeed: Record<string, PlayerProfile['gender']> = {
 }
 
 players.forEach((p) => {
-  profiles[p.id] = {
-    playerId: p.id,
-    nickname: p.nickname,
+  profileDetails[p.id] = {
     gender: genderSeed[p.id] ?? 'unknown',
-    avatarUrl: p.avatar,
     customNote: '',
   }
 })
 
 // 给部分玩家挂自定义信息(单一文本字段)
-profiles.p_xiaoqi.customNote = '游戏 UID 10086001;S101 烽火;钻石档'
-profiles.p_xiaobai.customNote = '游戏 UID 10086002;首充活动关注'
-profiles.p_xiaolin.customNote = '高消费;近期投诉到账延迟,需重点跟进'
-profiles.p_xiaotao.customNote = '老客;稳定续费'
-profiles.p_axian.customNote = '广告渠道试客,首日未成交'
-profiles.p_dahai.customNote = '充值大户;倾向私域专属客服;直接对接'
-profiles.p_xiaowu.customNote = '业务调整后下线,无效关系'
-profiles.p_kaikai.customNote = '已被玩家拉黑;主动发起会被禁'
+profileDetails.p_xiaoqi.customNote = '游戏 UID 10086001;S101 烽火;钻石档'
+profileDetails.p_xiaobai.customNote = '游戏 UID 10086002;首充活动关注'
+profileDetails.p_xiaolin.customNote = '高消费;近期投诉到账延迟,需重点跟进'
+profileDetails.p_xiaotao.customNote = '老客;稳定续费'
+profileDetails.p_axian.customNote = '广告渠道试客,首日未成交'
+profileDetails.p_dahai.customNote = '充值大户;倾向私域专属客服;直接对接'
+profileDetails.p_xiaowu.customNote = '业务调整后下线,无效关系'
+profileDetails.p_kaikai.customNote = '已被玩家拉黑;主动发起会被禁'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 关系记录(玩家×企微号);覆盖 normal / removed_by_agent / removed_by_player 三态
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface RelationSeed extends Omit<PlayerRelation, 'updatedAt' | 'addedAt' | 'deletedAt'> {
+interface RelationSeed extends Omit<PlayerRelation, 'updatedAt' | 'addedAt' | 'deletedAt' | 'corpId' | 'externalUserId' | 'syncVersion' | 'syncStatus' | 'lastSyncedAt'> {
   addedAt: string
   updatedAt?: string
   deletedAt?: string
@@ -134,11 +131,12 @@ const relationSeeds: RelationSeed[] = [
     playerId: 'p_xiaohe',
     accountId: 'wx_xiaobei',
     remark: '小贺',
-    description: '老客;最近一次会话已结束',
+    description: '老客;玩家曾删除好友,最近一次会话已结束',
     tagIds: ['tag_vip_c'],
-    relationStatus: 'normal',
+    relationStatus: 'removed_by_player',
     addedAt: '2026-04-01T09:00:00+08:00',
     updatedAt: '2026-05-17T16:30:00+08:00',
+    deletedAt: '2026-05-17T16:30:00+08:00',
   },
   {
     playerId: 'p_xiaomei',
@@ -237,12 +235,28 @@ const relationSeeds: RelationSeed[] = [
 
 const relationKey = (playerId: string, accountId: string) => `${playerId}::${accountId}`
 
+function externalUserIdFor(playerId: string): string {
+  return `external_${playerId}`
+}
+
+const duplicateRelationKeys = relationSeeds
+  .map((seed) => relationKey(seed.playerId, seed.accountId))
+  .filter((key, index, all) => all.indexOf(key) !== index)
+if (duplicateRelationKeys.length) {
+  throw new Error(`玩家关系种子存在重复复合键：${duplicateRelationKeys.join('、')}`)
+}
+
 const relationStore = new Map<string, PlayerRelation>(
   relationSeeds.map((seed) => [
     relationKey(seed.playerId, seed.accountId),
     {
       ...seed,
+      corpId: findAccount(seed.accountId)?.corpId ?? 'unknown_corp',
+      externalUserId: externalUserIdFor(seed.playerId),
       updatedAt: seed.updatedAt ?? seed.addedAt,
+      syncVersion: 1,
+      syncStatus: 'synced',
+      lastSyncedAt: seed.updatedAt ?? seed.addedAt,
     },
   ]),
 )
@@ -260,7 +274,7 @@ interface SummaryFallback {
 
 /**
  * 从一组消息汇总 lastMessage / messageCount / firstMessageAt。
- * 口径:排除 system;"已送达"= 玩家消息全算 + 客服消息仅 status==='sent'(排除 sending/failed)。
+ * 口径:只排除 system;发送中 / 失败消息也是会话历史的一部分,必须计数且参与最后消息判断。
  * 既用于整会话(buildConversationIndex),也用于单轮(buildConversationRounds)。
  */
 function summarizeMessages(
@@ -270,8 +284,7 @@ function summarizeMessages(
   const nonSystem = [...msgs]
     .filter((m) => m.contentType !== 'system')
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  const delivered = nonSystem.filter((m) => m.direction !== 'outgoing' || m.status === 'sent')
-  const last = delivered[delivered.length - 1] ?? nonSystem[nonSystem.length - 1]
+  const last = nonSystem[nonSystem.length - 1]
   const first = nonSystem[0]
   return {
     lastMessage: {
@@ -289,26 +302,22 @@ function summarizeMessages(
               ? `[文件] ${last.mediaName ?? ''}`
               : ''),
     },
-    messageCount: delivered.length,
+    messageCount: nonSystem.length,
     firstMessageAt: first?.createdAt ?? fallback.createdAt,
   }
 }
 
 /**
- * 会话/消息的反查源 = chatflowMock seed + localStorage 已落库主动发起会话。
- * player-center 不重存,但必须见到工作台同款集合(否则主动发起落库的会话在玩家中心丢失)。
- * 懒计算:每次反查都读 localStorage,反映当前工作台落库状态。
+ * 会话/消息的反查源 = chat-workbench 的 SPA 运行态单一来源。
+ * player-center 不重存，因此既能看到 seed / 已落库主动发起会话，也能在不刷新页面时
+ * 看到本次运行中新收、新发及状态变化后的会话。
  */
 function allConversations(): Conversation[] {
-  const persisted = loadProactivePersisted().conversations
-  const seen = new Set(conversations.map((c) => c.id))
-  return [...conversations, ...persisted.filter((c) => !seen.has(c.id))]
+  return getWorkbenchRuntime().conversations.filter((conversation) => !conversation.isProvisional)
 }
 
 function allMessages(): Message[] {
-  const persisted = loadProactivePersisted().messages
-  const seen = new Set(messages.map((m) => m.id))
-  return [...messages, ...persisted.filter((m) => !seen.has(m.id))]
+  return getWorkbenchRuntime().messages
 }
 
 function buildConversationIndex(): ConversationIndexEntry[] {
@@ -337,7 +346,7 @@ function splitConversationRounds(conversationId: string): Message[][] {
   const rounds: Message[][] = [[]]
   for (const m of msgs) {
     rounds[rounds.length - 1].push(m)
-    if (m.direction === 'system' && typeof m.text === 'string' && m.text.includes('本次会话已结束')) {
+    if (m.direction === 'system' && (m.systemEvent === 'conversation_ended' || (!m.systemEvent && typeof m.text === 'string' && m.text.includes('本次会话已结束')))) {
       rounds.push([])
     }
   }
@@ -409,7 +418,16 @@ function emit(event: PlayerCenterEvent) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getProfile(playerId: string): PlayerProfile | undefined {
-  return profiles[playerId]
+  const player = players.find((item) => item.id === playerId)
+  const details = profileDetails[playerId]
+  if (!player || !details) return undefined
+  return {
+    playerId: player.id,
+    nickname: player.nickname,
+    avatarUrl: player.avatar,
+    gender: details.gender,
+    customNote: details.customNote,
+  }
 }
 
 export function getAllRelations(): PlayerRelation[] {
@@ -442,8 +460,9 @@ export function getConversationIndexById(
 }
 
 /** 会话轮次条目(`/messages` 以轮次为维度展示) */
-export function getConversationRounds(): ConversationRoundEntry[] {
-  return buildConversationRounds()
+export function getConversationRounds(visibleAccountIds?: string[]): ConversationRoundEntry[] {
+  const visibleSet = visibleAccountIds ? new Set(visibleAccountIds) : null
+  return buildConversationRounds().filter((round) => !visibleSet || visibleSet.has(round.accountId))
 }
 
 /** 取某会话某一轮(1-based)的消息(供 `/messages` 消息内容按轮筛选);含 system 消息 */
@@ -487,20 +506,32 @@ export function listAccountsAvailable() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function nowISO(): string {
-  // 返回固定的 mock 当前时间(避免 Date.now 在 V1 演示中的非确定性)
-  return '2026-05-30T10:00:00+08:00'
+  return new Date().toISOString()
 }
 
 export function updateRelationFields(payload: RelationEditPayload): PlayerRelation | undefined {
   const key = relationKey(payload.playerId, payload.accountId)
   const current = relationStore.get(key)
   if (!current) return undefined
+  if (payload.expectedVersion !== undefined && payload.expectedVersion !== current.syncVersion) {
+    const conflicted = { ...current, syncStatus: 'conflict' as const }
+    relationStore.set(key, conflicted)
+    emit({
+      type: 'relation_changed',
+      payload: { playerId: payload.playerId, accountId: payload.accountId, relation: conflicted },
+    })
+    throw new Error('玩家关系已被其他同步任务更新，请刷新后重试')
+  }
+  const changedAt = nowISO()
   const next: PlayerRelation = {
     ...current,
     remark: payload.remark ?? current.remark,
     description: payload.description ?? current.description,
     tagIds: payload.tagIds ?? current.tagIds,
-    updatedAt: nowISO(),
+    updatedAt: changedAt,
+    syncVersion: current.syncVersion + 1,
+    syncStatus: 'synced',
+    lastSyncedAt: changedAt,
   }
   relationStore.set(key, next)
   emit({
@@ -513,18 +544,21 @@ export function updateRelationFields(payload: RelationEditPayload): PlayerRelati
 export function updateCustomNote(
   payload: PlayerNoteEditPayload,
 ): PlayerProfile | undefined {
-  const profile = profiles[payload.playerId]
-  if (!profile) return undefined
-  profiles[payload.playerId] = { ...profile, customNote: payload.customNote }
+  const details = profileDetails[payload.playerId]
+  if (!details) return undefined
+  profileDetails[payload.playerId] = { ...details, customNote: payload.customNote }
   emit({
     type: 'custom_note_changed',
     payload: { playerId: payload.playerId, customNote: payload.customNote },
   })
-  return profiles[payload.playerId]
+  return getProfile(payload.playerId)
 }
 
-/** 用于演示 / 测试:程序化更新关系状态(企微 API 驱动的事件通常不在前端触发) */
-export function _setRelationStatusForDemo(
+/**
+ * 接收企微侧好友关系状态变更的 mock 入口。
+ * 真实环境由服务端消费企微事件后推送；前端只订阅变更，不自行判定好友状态。
+ */
+export function setRelationStatusFromWechat(
   playerId: string,
   accountId: string,
   relationStatus: RelationStatus,
@@ -538,6 +572,9 @@ export function _setRelationStatusForDemo(
     relationStatus,
     deletedAt: relationStatus === 'normal' ? undefined : (deletedAt ?? nowISO()),
     updatedAt: nowISO(),
+    syncVersion: current.syncVersion + 1,
+    syncStatus: 'synced',
+    lastSyncedAt: nowISO(),
   }
   relationStore.set(key, next)
   emit({
@@ -556,8 +593,6 @@ export function _setRelationStatusForDemo(
   return next
 }
 
-// 暴露所有真人档案 map 给 read-only 视图(不要直接 mutate)
-export const allProfiles: Readonly<Record<string, PlayerProfile>> = profiles
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 玩家维度聚合视图(/players 列表 V1 用)
@@ -593,7 +628,7 @@ export function getPlayersAggregatedView(
   })
   const views: PlayerAggregatedView[] = []
   grouped.forEach((relations, playerId) => {
-    const profile = profiles[playerId]
+    const profile = getProfile(playerId)
     if (!profile) return
     const accountIds = Array.from(new Set(relations.map((r) => r.accountId))).sort()
     const tagIds = Array.from(new Set(relations.flatMap((r) => r.tagIds))).sort()

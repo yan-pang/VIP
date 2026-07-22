@@ -1,17 +1,24 @@
-import { Button, Drawer, Empty, Space, Tag } from 'antd'
-import type { Message } from '../../../types/chat'
-import { conversations, findAccount } from '../../../services/chatflowMock'
+import { Alert, Button, Drawer, Empty, Space, Tag } from 'antd'
+import { useEffect, useState } from 'react'
+import type { Conversation, Message } from '../../../types/chat'
+import { findAccount } from '../../../services/chatflowMock'
 
 interface Props {
   message: Message | null
+  conversation: Conversation | null
   onClose: () => void
   onIntervene: () => void
+  canIntervene: boolean
+  canRetry: boolean
+  onRetry: () => void
 }
 
-function FailureDrawer({ message, onClose, onIntervene }: Props) {
+function FailureDrawer({ message, conversation, onClose, onIntervene, canIntervene, canRetry, onRetry }: Props) {
   const failure = message?.failure
-  const conv = message ? conversations.find((c) => c.id === message.conversationId) : null
-  const account = conv ? findAccount(conv.accountId) : null
+  const account = conversation ? findAccount(conversation.accountId) : null
+  const [videoFailed, setVideoFailed] = useState(false)
+  useEffect(() => setVideoFailed(false), [message?.id])
+  const recordingExpired = !!failure?.recordingExpireAt && new Date(failure.recordingExpireAt).getTime() <= Date.now()
 
   return (
     <Drawer
@@ -22,9 +29,8 @@ function FailureDrawer({ message, onClose, onIntervene }: Props) {
       footer={
         <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
           <Button onClick={onClose}>关闭</Button>
-          <Button type="primary" onClick={onIntervene}>
-            人工介入
-          </Button>
+          {canRetry && <Button onClick={onRetry}>重试当前消息</Button>}
+          {canIntervene && <Button type="primary" onClick={onIntervene}>人工介入</Button>}
         </Space>
       }
     >
@@ -53,22 +59,22 @@ function FailureDrawer({ message, onClose, onIntervene }: Props) {
             <h4 className="cf-failure__h4">失败原文</h4>
             <pre className="cf-failure__raw">{failure.message}</pre>
           </section>
+          {!canIntervene && (
+            <div className="cf-failure__notice">需要人工介入时,请联系运营主管或系统管理员。</div>
+          )}
 
           <section>
             <h4 className="cf-failure__h4">操作录屏</h4>
-            {failure.recordingUrl ? (
+            {failure.recordingUrl && !recordingExpired && !videoFailed ? (
               <div className="cf-failure__video">
-                <div className="cf-failure__video-placeholder">
-                  ▶ 录屏播放器(Mock 占位)
-                  <span className="cf-text-tertiary">{failure.recordingUrl}</span>
-                </div>
+                <video src={failure.recordingUrl} controls preload="metadata" className="cf-msg__video" onError={() => setVideoFailed(true)} />
                 <p className="cf-failure__video-meta">
                   录屏保留至 {failure.recordingExpireAt ? new Date(failure.recordingExpireAt).toLocaleDateString() : '-'} /
                   大小 {failure.recordingSizeBytes ? `${(failure.recordingSizeBytes / 1024 / 1024).toFixed(1)} MB` : '-'}
                 </p>
               </div>
             ) : (
-              <div className="cf-failure__video-placeholder">录屏不可用或已过期</div>
+              <Alert type="info" showIcon message={recordingExpired ? '录屏已过期' : '录屏不可用'} description="可重试当前消息；仍失败时由主管或管理员进入控制台人工处理。" />
             )}
           </section>
         </div>

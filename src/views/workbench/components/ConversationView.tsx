@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons'
 import {
   Alert,
+  App as AntdApp,
   Button,
   Dropdown,
   Empty,
@@ -19,7 +20,6 @@ import {
   Space,
   Tag,
   Tooltip,
-  message as antMessage,
 } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -32,9 +32,10 @@ import {
   findAccount,
   findAgent,
   findPlayer,
-  forbiddenWords,
   getMessagesByConversation,
 } from '../../../services/chatflowMock'
+import { getRelation, subscribePlayerCenter } from '../../../services/playerCenterMock'
+import { assessOutboundDelivery } from '../../../services/opsAdminMock'
 import MessageStream from '../../../components/common/MessageStream'
 
 type SendPayload = { text?: string; attachments?: MessageAttachment[] }
@@ -44,12 +45,22 @@ interface DraftAttachment extends MessageAttachment {
   id: string
 }
 
+interface ConversationViewCache {
+  draft: string
+  attachments: DraftAttachment[]
+  expandedHistoryCount: number
+  scrollTop?: number
+}
+
+const conversationViewCache = new Map<string, ConversationViewCache>()
+
 interface Props {
   conversation: Conversation | null
   currentAgentId: string
   messages: Message[]
+  highlightMessageId?: string | null
   isReactivating: boolean
-  onSend: (conversationId: string, payload: SendPayload) => void
+  onSend: (conversationId: string, payload: SendPayload) => boolean
   onStartReactivate: (id: string) => void
   onCancelReactivate: (id: string) => void
   onAssignClick: () => void
@@ -59,6 +70,8 @@ interface Props {
   onToggleTag: (id: string, tag: ConversationTag) => void
   onClickFailed: (msg: Message) => void
   onRecall: (msg: Message) => void
+  canRecallMessage: (msg: Message) => boolean
+  canAssignOthers: boolean
 }
 
 const tagOptions: Array<{ key: ConversationTag; label: string }> = [
@@ -73,6 +86,7 @@ function ConversationView({
   conversation,
   currentAgentId,
   messages,
+  highlightMessageId,
   isReactivating,
   onSend,
   onStartReactivate,
@@ -84,23 +98,32 @@ function ConversationView({
   onToggleTag,
   onClickFailed,
   onRecall,
+  canRecallMessage,
+  canAssignOthers,
 }: Props) {
-  const [draft, setDraft] = useState('')
-  const [attachments, setAttachments] = useState<DraftAttachment[]>([])
+  const { message, modal } = AntdApp.useApp()
+  const cacheKey = conversation ? `${currentAgentId}:${conversation.id}` : ''
+  const cachedView = cacheKey ? conversationViewCache.get(cacheKey) : undefined
+  const [draft, setDraft] = useState(cachedView?.draft ?? '')
+  const [attachments, setAttachments] = useState<DraftAttachment[]>(cachedView?.attachments ?? [])
   const [videoPreview, setVideoPreview] = useState<{ url: string; name: string } | null>(null)
+  const [, setPlayerCenterVersion] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const streamRef = useRef<HTMLDivElement>(null)
+
+  // 关系备注在玩家档案侧可编辑；收到同源广播后同步刷新会话头部展示。
+  useEffect(() => subscribePlayerCenter(() => setPlayerCenterVersion((v) => v + 1)), [])
 
   const visibleMessages = useMemo(
     () => (conversation ? getMessagesByConversation(messages, conversation.id) : []),
     [conversation, messages],
   )
-  const hits = useMemo(() => detectForbidden(draft), [draft])
-
   // 按"本次会话已结束"系统分割条切轮次,最后一轮(live 或最近一次结束的轮)默认显示
   const segments = useMemo(() => splitRoundsByEnded(visibleMessages), [visibleMessages])
   const totalHistoryRounds = Math.max(0, segments.length - 1)
-  const [expandedHistoryCount, setExpandedHistoryCount] = useState(0)
+  const [expandedHistoryCount, setExpandedHistoryCount] = useState(
+    cachedView?.expandedHistoryCount ?? 0,
+  )
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const isExpandingRef = useRef(false)
 
@@ -110,21 +133,63 @@ function ConversationView({
     return segments.slice(startIdx).flat()
   }, [segments, expandedHistoryCount])
 
-  // 切换会话:清空草稿(文字 + 未发送附件),重置展开计数 / loading,默认只渲染最新一轮并滚到底
+  // 搜索命中历史轮次时先自动展开到目标所在轮次，不要求客服逐轮上滑。
   useEffect(() => {
+    if (!highlightMessageId) return
+    const targetSegmentIndex = segments.findIndex((segment) =>
+      segment.some((message) => message.id === highlightMessageId),
+    )
+    if (targetSegmentIndex < 0) return
+    const requiredHistoryCount = segments.length - 1 - targetSegmentIndex
+    setExpandedHistoryCount((current) => Math.max(current, requiredHistoryCount))
+  }, [highlightMessageId, segments])
+
+  // 父级按“身份 + 会话”设置 key；路由返回或切回会话时从 SPA 运行态恢复草稿与浏览位置。
+  useEffect(() => {
+    setIsLoadingHistory(false)
+    isExpandingRef.current = false
+    requestAnimationFrame(() => {
+      const stream = streamRef.current
+      if (stream) stream.scrollTop = cachedView?.scrollTop ?? stream.scrollHeight
+    })
+  }, [cachedView?.scrollTop])
+
+  useEffect(() => {
+    if (
+      !highlightMessageId
+      || !visibleStreamMessages.some((message) => message.id === highlightMessageId)
+    ) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      const target = Array.from(
+        streamRef.current?.querySelectorAll<HTMLElement>('[data-message-id]') ?? [],
+      ).find((element) => element.dataset.messageId === highlightMessageId)
+      target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [highlightMessageId, visibleStreamMessages])
+
+  useEffect(() => {
+    if (!cacheKey) return
+    const previous = conversationViewCache.get(cacheKey)
+    conversationViewCache.set(cacheKey, {
+      draft,
+      attachments,
+      expandedHistoryCount,
+      scrollTop: previous?.scrollTop,
+    })
+  }, [attachments, cacheKey, draft, expandedHistoryCount])
+
+  // 好友关系断开后，当前草稿已无法送达；立即清空并交由只读态提示原因。
+  useEffect(() => {
+    if (!conversation || conversation.relationStatus === 'normal') return
     setDraft('')
     setAttachments((prev) => {
       prev.forEach((a) => URL.revokeObjectURL(a.url))
       return []
     })
-    setExpandedHistoryCount(0)
-    setIsLoadingHistory(false)
-    isExpandingRef.current = false
-    requestAnimationFrame(() => {
-      const stream = streamRef.current
-      if (stream) stream.scrollTop = stream.scrollHeight
-    })
-  }, [conversation?.id])
+  }, [conversation])
 
   // 上滑触发展开:先 ~350ms loading 占位,再渲染新一轮 + 把 scrollTop 锚回原本可见位置
   const triggerExpandOneRound = () => {
@@ -159,6 +224,16 @@ function ConversationView({
   const handleStreamScroll = () => {
     const stream = streamRef.current
     if (!stream) return
+    if (cacheKey) {
+      const previous = conversationViewCache.get(cacheKey)
+      conversationViewCache.set(cacheKey, {
+        ...previous,
+        draft,
+        attachments,
+        expandedHistoryCount,
+        scrollTop: stream.scrollTop,
+      })
+    }
     if (stream.scrollTop > 40) return
     triggerExpandOneRound()
   }
@@ -199,33 +274,41 @@ function ConversationView({
 
   const account = findAccount(conversation.accountId)
   const player = findPlayer(conversation.playerId)
+  // 关系备注是玩家 × 当前企微号的权威展示字段，与列表、右侧档案保持一致。
+  const relationRemark = getRelation(conversation.playerId, conversation.accountId)?.remark?.trim()
+  const playerDisplayName = relationRemark || player?.nickname || '未知玩家'
   const assignee = conversation.assigneeId ? findAgent(conversation.assigneeId) : null
   const isMyAssignment = conversation.assigneeId === currentAgentId
   const isEnded = conversation.status === 'ended'
-  const isAccountOffline = account?.status !== 'online'
-  const accountBlocker = account?.status === 'banned'
+  const deliveryAssessment = account ? assessOutboundDelivery(account.id) : null
+  const accountHardBlocked = !account?.enabled || deliveryAssessment?.disposition === 'blocked'
+  const accountBlocker = !account?.enabled
+    ? '该企微号接入已禁用，历史会话仅可查看'
+    : account?.status === 'banned'
     ? '该企微号已封禁,所有消息无法发送'
-    : account?.status === 'offline'
-      ? '该企微号离线,请到控制台重新登录'
+    : deliveryAssessment?.disposition === 'blocked'
+      ? `发送已被风控阻断：${deliveryAssessment.message}`
       : null
-  // 已结束 + 主动发起态 → 解锁输入区(账号在线 + 玩家未删好友才允许)
-  const canReactivate = isEnded && !isAccountOffline && !conversation.playerHasDeletedFriendship
+  const queueNotice = deliveryAssessment?.disposition === 'queued' ? deliveryAssessment.message : null
+  // 已结束 + 重新联系态 → 硬风控和好友关系正常时解锁；暂时不可用会进入待发队列。
+  const canReactivate = isEnded && !accountHardBlocked && conversation.relationStatus === 'normal'
   const canEditWhileEnded = isEnded && isReactivating && canReactivate
   // 排队中(未指派):V1 取消隐式指派,必须先指派给自己才能回复,输入区不渲染
   const isQueueing = !isEnded && conversation.assigneeId === null
   const isReadOnly =
     isQueueing ||
+    conversation.relationStatus !== 'normal' ||
     (conversation.assigneeId !== null && !isMyAssignment && !isEnded) ||
     (isEnded && !canEditWhileEnded) ||
-    (isAccountOffline && !isEnded)
-  const actionsDisabled = isEnded // Diff C:已结束分组所有标准操作按钮禁用
+    (accountHardBlocked && !isEnded)
+  const actionsDisabled = isEnded || !!conversation.isProvisional || accountHardBlocked || conversation.relationStatus !== 'normal'
 
-  const canSend = (draft.trim().length > 0 || attachments.length > 0) && hits.length === 0
+  const canSend = draft.trim().length > 0 || attachments.length > 0
 
-  // 图文一起发:一条消息带 text + 全部草稿附件;成功后清空草稿(不 revoke,url 已被消息引用)
+  // 编辑区一次提交 text + 全部草稿附件；发送层用一个消息发送批次拆成多条消息，URL 仍被媒体消息引用。
   const handleSend = () => {
     if (!canSend) return
-    onSend(conversation.id, {
+    const accepted = onSend(conversation.id, {
       text: draft.trim() || undefined,
       attachments: attachments.length
         ? attachments.map((a) => ({
@@ -236,13 +319,15 @@ function ConversationView({
           }))
         : undefined,
     })
-    setDraft('')
-    setAttachments([])
+    if (accepted) {
+      setDraft('')
+      setAttachments([])
+    }
   }
 
   const addImageDraft = (file: File) => {
     if (file.size > 20 * 1024 * 1024) {
-      Modal.warning({ title: '图片过大', content: '单图限制 20MB' })
+      modal.warning({ title: '图片过大', content: '单图限制 20MB' })
       return
     }
     setAttachments((prev) => [
@@ -259,7 +344,7 @@ function ConversationView({
 
   const addMediaDraft = (file: File) => {
     if (file.size > 50 * 1024 * 1024) {
-      Modal.warning({ title: '文件过大', content: '单文件限制 50MB' })
+      modal.warning({ title: '文件过大', content: '单文件限制 50MB' })
       return
     }
     const isVideo = file.type.startsWith('video/')
@@ -313,22 +398,18 @@ function ConversationView({
 
   const handleCopyId = () => {
     navigator.clipboard?.writeText(conversation.id)
-    antMessage.success(`会话 ID 已复制:${conversation.id}`)
+    message.success(`会话 ID 已复制:${conversation.id}`)
   }
 
   return (
     <div className="cf-conv-view">
       <header className="cf-conv-view__header">
         <div className="cf-conv-view__title">
-          <strong>{player?.nickname}</strong>
-          {player?.remark ? (
-            <span className="cf-text-tertiary" style={{ fontSize: 12 }}>
-              （{player.remark}）
-            </span>
-          ) : null}
+          <strong>{playerDisplayName}</strong>
           <Tag color="green" bordered={false}>
             {account?.shortName}
           </Tag>
+          {conversation.isProvisional && <Tag color="blue">待首条消息送达</Tag>}
           <span className="cf-conv-view__assignee">
             指派:
             {assignee ? (
@@ -353,15 +434,15 @@ function ConversationView({
           {isEnded ? (
             isReactivating ? (
               <Button size="small" onClick={() => onCancelReactivate(conversation.id)}>
-                取消发起
+                取消重新联系
               </Button>
             ) : (
               <Tooltip
                 title={
-                  isAccountOffline
-                    ? '该企微号当前离线/封禁,无法主动发起'
-                    : conversation.playerHasDeletedFriendship
-                      ? '玩家已删好友,无法主动发起'
+                  accountHardBlocked
+                    ? accountBlocker ?? '该企微号当前不可用'
+                    : conversation.relationStatus !== 'normal'
+                      ? '好友关系已断开，重新添加后才能主动发起'
                       : '解锁输入区,主动给玩家发起会话;发送成功后会话进入会话中'
                 }
               >
@@ -373,15 +454,15 @@ function ConversationView({
                   disabled={!canReactivate}
                   onClick={() => onStartReactivate(conversation.id)}
                 >
-                  主动发起会话
+                  重新联系
                 </Button>
               </Tooltip>
             )
           ) : conversation.assigneeId === null ? (
-            <Button size="small" type="primary" ghost onClick={onAssignClick}>
+            <Button size="small" type="primary" ghost disabled={actionsDisabled} onClick={onAssignClick}>
               指派
             </Button>
-          ) : isMyAssignment ? (
+          ) : isMyAssignment || canAssignOthers ? (
             <Button size="small" disabled={actionsDisabled} onClick={onTransferClick}>
               转接
             </Button>
@@ -415,7 +496,7 @@ function ConversationView({
             danger
             disabled={!isMyAssignment || actionsDisabled}
             onClick={() => {
-              Modal.confirm({
+              modal.confirm({
                 title: '结束会话',
                 content: '确认后本次会话标记为结束,可被玩家重新激活。',
                 okText: '确认结束',
@@ -432,20 +513,25 @@ function ConversationView({
       {accountBlocker && (
         <Alert type="error" showIcon banner message={accountBlocker} />
       )}
+      {!accountBlocker && queueNotice && (
+        <Alert type="warning" showIcon banner message={`${queueNotice}；发送后会明确显示“待发送”状态。`} />
+      )}
       {isEnded && isReactivating && !accountBlocker && (
         <Alert
           type="info"
           showIcon
           banner
-          message="主动发起态:发送成功后会话将进入会话中并指派给你;发送失败状态保持不变,可继续重试"
+          message="重新联系中：首条消息成功后会话才会进入会话中并指派给你；待发或失败时仍保持已结束，可继续重试"
         />
       )}
-      {conversation.playerHasDeletedFriendship && !accountBlocker && (
+      {conversation.relationStatus !== 'normal' && !accountBlocker && (
         <Alert
           type="warning"
           showIcon
           banner
-          message="此玩家已删好友,后续消息无法送达"
+          message={conversation.relationStatus === 'removed_by_agent'
+            ? '该好友已被管家删除，重新添加前禁止继续发送'
+            : '玩家已删除好友，重新添加前禁止继续发送'}
         />
       )}
 
@@ -484,21 +570,27 @@ function ConversationView({
           )}
         <MessageStream
           messages={visibleStreamMessages}
+          highlightMessageId={highlightMessageId}
           onClickFailed={onClickFailed}
           onRecall={onRecall}
+          canRecallMessage={canRecallMessage}
         />
       </div>
 
       <footer className="cf-conv-view__composer">
         {isReadOnly ? (
           <div className="cf-conv-view__readonly">
-            {isEnded
-              ? '会话已结束,如需继续沟通请点击右上角「主动发起会话」'
-              : isAccountOffline
-                ? `企微号 ${account?.shortName ?? ''} 当前不可用,无法发送消息`
-                : isQueueing
-                  ? '此会话在排队中,点击右上角「指派」接入(可指派给自己)后即可回复'
-                  : `此会话已指派给 ${assignee?.name ?? '其他客服'},你只能查看`}
+            {conversation.relationStatus !== 'normal'
+              ? '好友关系已断开，重新添加后才能继续发送消息'
+              : isEnded
+                ? '会话已结束，如需继续沟通请点击右上角「重新联系」'
+                : accountHardBlocked
+                  ? `企微号 ${account?.shortName ?? ''} 当前不可用,无法发送消息`
+                  : isQueueing
+                    ? '此会话在排队中,点击右上角「指派」接入(可指派给自己)后即可回复'
+                    : canAssignOthers
+                      ? `此会话已指派给 ${assignee?.name ?? '其他客服'}，消息只读；如需调整负责人可点击右上角「转接」`
+                      : `此会话已指派给 ${assignee?.name ?? '其他客服'},你只能查看`}
           </div>
         ) : (
           <>
@@ -600,7 +692,7 @@ function ConversationView({
               autoSize={{ minRows: 5, maxRows: 18 }}
               placeholder={
                 canEditWhileEnded
-                  ? '输入消息主动发起会话,Enter 发送,Shift+Enter 换行'
+                  ? '输入重新联系内容，Enter 发送，Shift+Enter 换行'
                   : '输入消息,Enter 发送,Shift+Enter 换行'
               }
               value={draft}
@@ -613,17 +705,6 @@ function ConversationView({
                 }
               }}
             />
-            {hits.length > 0 && (
-              <div className="cf-conv-view__forbidden">
-                含违禁词:
-                {hits.map((w) => (
-                  <Tag color="red" key={w}>
-                    {w}
-                  </Tag>
-                ))}
-                <span className="cf-text-tertiary">请修改后发送</span>
-              </div>
-            )}
             <div className="cf-conv-view__send">
               <Button type="primary" disabled={!canSend} onClick={handleSend}>
                 发送
@@ -638,7 +719,7 @@ function ConversationView({
         title={videoPreview?.name}
         footer={null}
         width={640}
-        destroyOnClose
+        destroyOnHidden
         onCancel={() => setVideoPreview(null)}
       >
         {videoPreview && (
@@ -654,11 +735,6 @@ function ConversationView({
   )
 }
 
-function detectForbidden(text: string): string[] {
-  if (!text) return []
-  return forbiddenWords.filter((w) => text.includes(w))
-}
-
 function splitRoundsByEnded(msgs: Message[]): Message[][] {
   if (msgs.length === 0) return []
   const rounds: Message[][] = [[]]
@@ -667,7 +743,7 @@ function splitRoundsByEnded(msgs: Message[]): Message[][] {
     if (
       m.direction === 'system' &&
       typeof m.text === 'string' &&
-      m.text.includes('本次会话已结束')
+      (m.systemEvent === 'conversation_ended' || (!m.systemEvent && m.text.includes('本次会话已结束')))
     ) {
       rounds.push([])
     }

@@ -7,21 +7,17 @@ interface Props {
   agents: Agent[]
   currentAgentId: string
   onClose: () => void
-  onSubmit: (conversationId: string, agentId: string, note?: string) => void
+  onSubmit: (conversationId: string, agentId: string) => void
 }
 
 function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Props) {
   const [keyword, setKeyword] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [note, setNote] = useState('')
 
   const candidates = useMemo(() => {
     if (!state) return []
-    // 离线客服不支持转接/指派,候选列表只保留在线客服
+    // 离线客服不支持转接/指派；转接时的原指派人已由调用方剔除。
     let list = agents.filter((a) => a.online)
-    if (state.mode === 'transfer') {
-      list = list.filter((a) => a.id !== currentAgentId)
-    }
     if (keyword) {
       list = list.filter((a) => a.name.includes(keyword))
     }
@@ -44,21 +40,19 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
       onCancel={() => {
         setKeyword('')
         setSelectedId(null)
-        setNote('')
         onClose()
       }}
       onOk={() => {
         if (state && selectedId) {
-          onSubmit(state.conversationId, selectedId, note.trim() || undefined)
+          onSubmit(state.conversationId, selectedId)
           setKeyword('')
           setSelectedId(null)
-          setNote('')
         }
       }}
       okButtonProps={{ disabled: !selectedId }}
       okText={state?.mode === 'transfer' ? '确认转接' : '确认指派'}
       width={480}
-      destroyOnClose
+      destroyOnHidden
     >
       <div className="cf-assign">
         <div className="cf-assign__field">
@@ -101,18 +95,6 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
               </button>
             ))
           )}
-        </div>
-
-        <div className="cf-assign__field">
-          <label>内部备注(选填,玩家不可见)</label>
-          <Input.TextArea
-            placeholder="输入备注..."
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={200}
-            rows={3}
-            showCount
-          />
         </div>
       </div>
     </Modal>

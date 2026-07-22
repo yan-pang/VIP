@@ -5,6 +5,7 @@ import './index.css'
 import './styles/global.scss'
 import './styles/Workbench.scss'
 import './styles/Control.scss'
+import './styles/OpsAdmin.scss'
 import './styles/SearchPanel.scss'
 
 createRoot(document.getElementById('root')!).render(

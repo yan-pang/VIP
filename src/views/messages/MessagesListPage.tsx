@@ -1,12 +1,16 @@
 /**
  * /messages 消息管理列表页(D2 页面 3)
- * 当前为 build 阶段第 1 轮:
- *   - 顶部筛选条 + 会话索引表 + 行操作"查看对话消息" + 分页
- *   - 支持 ?conversationId=<id> 深链直达 Drawer(异步并行 — 表格按其余筛选,Drawer 立即打开)
+ * - 按会话轮次展示,支持发送方 / 时间 / 内容 / 玩家关系筛选
+ * - 行操作打开只读 Drawer,支持 ?conversationId=<id>&round=<n> 深链
+ * - 数据直接读取工作台运行态,新收 / 新发消息跨路由即时可见
  */
+import {
+  CopyOutlined,
+} from '@ant-design/icons'
 import {
   Avatar,
   Button,
+  DatePicker,
   Empty,
   Input,
   Select,
@@ -15,11 +19,15 @@ import {
   Tag,
   Tooltip,
   Typography,
+  message as antdMessage,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { findAccount, findAgent, findPlayer, wechatAccounts } from '../../services/chatflowMock'
+import { usePermissionSession } from '../../services/permissionMock'
+import { useWorkbenchRuntime } from '../../services/workbenchRuntimeMock'
 import {
   getConversationRounds,
   getRelation,
@@ -32,12 +40,16 @@ import type { ConversationRoundEntry } from '../../types/playerCenter'
 import ConversationDrawer, {
   type ConversationDrawerContext,
 } from '../../components/common/ConversationDrawer'
+import '../../styles/PlayerCenter.scss'
 
 const { Text } = Typography
 
 interface FilterState {
   conversationId: string
   accountIds: string[]
+  lastSenderType: 'all' | 'player' | 'agent'
+  messageTimeStart: string
+  messageTimeEnd: string
   content: string
   playerRemark: string
   playerTagIds: string[]
@@ -46,6 +58,9 @@ interface FilterState {
 const DEFAULT_FILTER: FilterState = {
   conversationId: '',
   accountIds: [],
+  lastSenderType: 'all',
+  messageTimeStart: '',
+  messageTimeEnd: '',
   content: '',
   playerRemark: '',
   playerTagIds: [],
@@ -74,6 +89,12 @@ function parseFilterFromUrl(sp: URLSearchParams): FilterState {
   return {
     conversationId: sp.get('cid') ?? '',
     accountIds: csv('acc'),
+    lastSenderType:
+      sp.get('sender') === 'player' || sp.get('sender') === 'agent'
+        ? sp.get('sender') as 'player' | 'agent'
+        : 'all',
+    messageTimeStart: sp.get('from') ?? '',
+    messageTimeEnd: sp.get('to') ?? '',
     content: sp.get('q') ?? '',
     playerRemark: sp.get('remark') ?? '',
     playerTagIds: csv('tags'),
@@ -95,6 +116,8 @@ function parsePage(sp: URLSearchParams): number {
 }
 
 function MessagesListPage() {
+  const session = usePermissionSession()
+  const runtime = useWorkbenchRuntime()
   const [searchParams, setSearchParams] = useSearchParams()
   // 初值从 URL query 还原(惰性);后续变更回写 URL
   const [filter, setFilter] = useState<FilterState>(() => parseFilterFromUrl(searchParams))
@@ -104,6 +127,7 @@ function MessagesListPage() {
   const [page, setPage] = useState(() => parsePage(searchParams))
   const [pageSize, setPageSize] = useState(() => parsePageSize(searchParams))
   const [version, setVersion] = useState(0)
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
 
   useEffect(() => subscribePlayerCenter(() => setVersion((v) => v + 1)), [])
 
@@ -115,6 +139,10 @@ function MessagesListPage() {
     }, 500)
     return () => clearTimeout(handle)
   }, [contentInput, filter.content])
+
+  useEffect(() => {
+    setSelectedRoundId(null)
+  }, [filter, page, pageSize])
 
   // Drawer 状态完全由 URL 驱动:
   //  - 打开:点行操作时写 ?conversationId=<id>
@@ -156,6 +184,9 @@ function MessagesListPage() {
     if (roundInUrl) next.set('round', roundInUrl)
     if (filter.conversationId) next.set('cid', filter.conversationId)
     if (filter.accountIds.length) next.set('acc', filter.accountIds.join(','))
+    if (filter.lastSenderType !== 'all') next.set('sender', filter.lastSenderType)
+    if (filter.messageTimeStart) next.set('from', filter.messageTimeStart)
+    if (filter.messageTimeEnd) next.set('to', filter.messageTimeEnd)
     if (filter.content) next.set('q', filter.content)
     if (filter.playerRemark) next.set('remark', filter.playerRemark)
     if (filter.playerTagIds.length) next.set('tags', filter.playerTagIds.join(','))
@@ -170,8 +201,14 @@ function MessagesListPage() {
   }, [filter, sort, page, pageSize, conversationIdInUrl, roundInUrl, searchParams, setSearchParams])
 
   // /messages 以「会话轮次」为维度:同一会话的多轮(已结束→重开)拆成多行
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const allRounds = useMemo(() => getConversationRounds(), [version])
+  const allRounds = useMemo(
+    () => {
+      void version
+      void runtime
+      return getConversationRounds(session.visibleAccountIds)
+    },
+    [version, runtime, session.visibleAccountIds],
+  )
 
   const filtered = useMemo(() => {
     const contentQuery = filter.content.trim().toLowerCase()
@@ -180,10 +217,31 @@ function MessagesListPage() {
       // conversationId 精确筛:支持粘 conversationId(命中其全部轮次)或 roundId(命中单轮)
       if (cidQuery && s.conversationId !== cidQuery && s.roundId !== cidQuery) return false
       if (filter.accountIds.length > 0 && !filter.accountIds.includes(s.accountId)) return false
+      if (
+        filter.lastSenderType !== 'all'
+        && s.lastMessage.senderType !== filter.lastSenderType
+      ) return false
+      const roundMessages =
+        contentQuery || filter.messageTimeStart || filter.messageTimeEnd
+          ? getRoundMessages(s.conversationId, s.roundIndex)
+          : []
+      if (filter.messageTimeStart || filter.messageTimeEnd) {
+        const start = filter.messageTimeStart
+          ? dayjs(filter.messageTimeStart).startOf('day').valueOf()
+          : Number.NEGATIVE_INFINITY
+        const end = filter.messageTimeEnd
+          ? dayjs(filter.messageTimeEnd).endOf('day').valueOf()
+          : Number.POSITIVE_INFINITY
+        const hit = roundMessages.some((message) => {
+          if (message.contentType === 'system') return false
+          const createdAt = dayjs(message.createdAt).valueOf()
+          return createdAt >= start && createdAt <= end
+        })
+        if (!hit) return false
+      }
       // 消息内容:只扫「该轮」的消息(text 或 mediaName 任一命中即纳入)
       if (contentQuery) {
-        const msgs = getRoundMessages(s.conversationId, s.roundIndex)
-        const hit = msgs.some((m) => {
+        const hit = roundMessages.some((m) => {
           if (m.contentType === 'system') return false
           const text = (m.text ?? '').toLowerCase()
           const mediaName = (m.mediaName ?? '').toLowerCase()
@@ -224,10 +282,12 @@ function MessagesListPage() {
     label: t.deprecated ? `${t.label}(已废弃)` : t.label,
     value: t.id,
   }))
-  const accountOptions = wechatAccounts.map((a) => ({
+  const accountOptions = wechatAccounts
+    .filter((account) => session.visibleAccountIds.includes(account.id))
+    .map((a) => ({
     label: `${a.shortName}${a.status !== 'online' ? ` · ${a.status === 'banned' ? '封禁' : '离线'}` : ''}`,
     value: a.id,
-  }))
+    }))
 
   const columns: ColumnsType<ConversationRoundEntry> = [
     {
@@ -235,9 +295,26 @@ function MessagesListPage() {
       key: 'round',
       width: 200,
       render: (_v, r) => (
-        <Text style={{ fontFamily: 'SF Mono, Menlo, monospace', fontSize: 12 }}>
-          {r.roundId}
-        </Text>
+        <Space size={2}>
+          <Text style={{ fontFamily: 'SF Mono, Menlo, monospace', fontSize: 12 }}>
+            {r.roundId}
+          </Text>
+          <Button
+            type="text"
+            size="small"
+            icon={<CopyOutlined />}
+            aria-label={`复制会话轮次 ${r.roundId}`}
+            onClick={async (event) => {
+              event.stopPropagation()
+              try {
+                await navigator.clipboard?.writeText(r.roundId)
+                antdMessage.success('已复制会话轮次')
+              } catch {
+                antdMessage.warning('请手动复制')
+              }
+            }}
+          />
+        </Space>
       ),
     },
     {
@@ -351,7 +428,7 @@ function MessagesListPage() {
   }
 
   return (
-    <section style={{ padding: 16, background: '#F5F5F5', minHeight: '100%' }}>
+    <section className="cf-player-center" style={{ padding: 16, background: '#F5F5F5' }}>
       <Typography.Title level={4} style={{ marginTop: 0 }}>
         消息管理
       </Typography.Title>
@@ -389,6 +466,35 @@ function MessagesListPage() {
           }}
           style={{ minWidth: 200 }}
           maxTagCount="responsive"
+        />
+        <Select
+          value={filter.lastSenderType}
+          options={[
+            { label: '最后发送方：全部', value: 'all' },
+            { label: '最后发送方：玩家', value: 'player' },
+            { label: '最后发送方：客服', value: 'agent' },
+          ]}
+          onChange={(value) => {
+            setFilter((current) => ({ ...current, lastSenderType: value }))
+            setPage(1)
+          }}
+          style={{ width: 170 }}
+        />
+        <DatePicker.RangePicker
+          value={
+            filter.messageTimeStart && filter.messageTimeEnd
+              ? [dayjs(filter.messageTimeStart), dayjs(filter.messageTimeEnd)]
+              : null
+          }
+          onChange={(value) => {
+            setFilter((current) => ({
+              ...current,
+              messageTimeStart: value?.[0]?.format('YYYY-MM-DD') ?? '',
+              messageTimeEnd: value?.[1]?.format('YYYY-MM-DD') ?? '',
+            }))
+            setPage(1)
+          }}
+          placeholder={['消息时间起', '消息时间止']}
         />
         <Input
           placeholder="消息内容(扫全部聊天记录)"
@@ -429,6 +535,14 @@ function MessagesListPage() {
         dataSource={pageData}
         scroll={{ x: 1380 }}
         size="small"
+        rowClassName={(record) =>
+          `cf-table-row--interactive${
+            selectedRoundId === record.roundId ? ' cf-table-row--selected' : ''
+          }`
+        }
+        onRow={(record) => ({
+          onClick: () => setSelectedRoundId(record.roundId),
+        })}
         onChange={(_pag, _filters, sorter) => {
           const s = Array.isArray(sorter) ? sorter[0] : sorter
           const key = s?.order ? String(s.columnKey ?? '') : ''
@@ -451,13 +565,18 @@ function MessagesListPage() {
           },
         }}
         locale={{
-          emptyText: <Empty description="未找到匹配的会话" />,
+          emptyText: (
+            <Empty description="未找到匹配的会话">
+              <Button size="small" onClick={handleClearFilter}>清空筛选</Button>
+            </Empty>
+          ),
         }}
       />
 
       <ConversationDrawer
         open={drawerCtx !== null}
         context={drawerCtx}
+        visibleAccountIds={session.visibleAccountIds}
         onClose={handleCloseDrawer}
       />
     </section>

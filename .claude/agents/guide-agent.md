@@ -21,15 +21,14 @@
 
 - `design.md`:领域主设计文档,**只装当前稳定产品设计**(给 AI / demo 实现);顶部带 `## 章节索引`
 - `decisions.md`:领域决策/迭代史(追加式,倒序,按需读;把"为什么/变过什么"从 design.md 分离出来)
-- `delivery/prd.md`:领域长期 PRD(权威源,持续演进)
-- `delivery/test/strategy.md`:领域测试策略
-- `delivery/test/cases.md`:领域测试用例库
+- `README.md`:领域入口与文件说明
+- `delivery/`:可选的正式交付快照；仅在用户明确要求交付时生成
 
 固定边界:
 
 - 业务领域**不再**在目录下放 `research.md` 或 `tech/`;这两类跨领域内容统一放项目级目录。
 - `design.md` 只承接会影响页面、交互、流程或 Mock 的**当前**稳定设计结论;决策记录、迭代历史、待确认项写入 `decisions.md`,不堆进 `design.md`。
-- `delivery/prd.md` 是领域 PRD 的单点权威源;版本 `release-prd` 从这里组装。
+- `design.md` + `decisions.md` 是领域事实源；可执行行为还必须与自动化契约测试一致。可选 `delivery/` 是交付快照，不反向覆盖事实源。
 - 如果某个材料只影响单领域的 demo 设计,直接更新 `design.md`,不单独留档。
 
 ## 项目级内容归属规则
@@ -55,7 +54,7 @@
 2. `project/ui-brand.md` — 项目级设计默认值(稳定、小,可整篇)。
 3. `project/domains/<domain>/design.md` — **只按任务读相关小节**(先章节索引 / grep `^#`,再 offset/limit 跳读),不整篇读。
 4. `project/domains/<domain>/decisions.md` — 仅当需要"为什么这样定 / 变过什么"时,按需读相关条目。
-5. 如需对外交付参考:`project/domains/<domain>/delivery/prd.md`、`delivery/test/*.md`,按需读相关条目。
+5. 如需对外交付参考：优先读取稳定设计、决策与自动化测试；已有 `delivery/` 仅作为历史交付快照按需读取。
 6. 如涉及跨领域调研 / 研发技术约束:`project/research/`、`project/tech/` 下相关版本文件,按需读。
 7. 如当前阶段是 `status` / `review` / `deliver`:按需读 `project/delivery/` 中已有版本产物。
 8. 进入具体阶段后,再读对应 canonical spec 的**相关小节**(不整篇吞):
@@ -113,11 +112,11 @@
 2. 项目级默认设计规范只从 `project/ui-brand.md` 读取;运行时状态(当前 / 下一步 / 最近动态)只从 `project/TASKS.md` 读取,`project/overview.md` 只作项目地图,决策/迭代史在领域 `decisions.md`。
 3. 不把 `README.md` 或其他人类说明文档作为阶段判定输入。
 4. 第一版只使用你自己和阶段 skills,不额外拆专项 agent。
-5. 如果业务领域目录不存在,初始化时**只**建 `design.md`(按需加 `delivery/`);不再建 `research.md` 或 `tech/`。
+5. 如果业务领域目录不存在，初始化时固定创建 `README.md`、`design.md`、`decisions.md`；用户明确要求交付时再加 `delivery/`。不再建 `research.md` 或 `tech/`。
 6. 跨领域调研、研发技术设计默认走项目级目录(`project/research/`、`project/tech/`);不挤进业务领域目录。
 7. 如果 `project/tech/` 中的技术约束会改变 demo 表现,先同步到对应领域 `design.md` 或据此调整阶段判断。
 8. 如果用户一条消息里既要吸收材料又要继续设计 / 改代码,先由 `breakdown` 判断影响范围;若材料不阻塞当前目标,可继续顺延到 `design` 或 `build`。
-9. 对外交付阶段:领域 PRD 是权威源,版本 `release-prd` 从领域 PRD 组装,不手改版本产物。
+9. 对外交付阶段：从领域稳定设计、决策和自动化测试组装版本 `release-prd`；版本产物冻结后不手改。
 10. 不重新引入并行的旧流程目录。
 
 ## 每次输出至少要回答

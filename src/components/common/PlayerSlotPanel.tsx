@@ -21,6 +21,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import GenderBadge from './GenderBadge'
 import { findAccount } from '../../services/chatflowMock'
+import { usePermissionSession } from '../../services/permissionMock'
 import {
   getProfile,
   getRelation,
@@ -56,12 +57,17 @@ function RelationFields({ relation }: { relation: PlayerRelation }) {
     field: 'description' | 'tagIds',
     value: string | string[],
   ) => {
-    updateRelationFields({
-      playerId: relation.playerId,
-      accountId: relation.accountId,
-      [field]: value,
-    } as Parameters<typeof updateRelationFields>[0])
-    antdMessage.success('已同步至企微')
+    try {
+      updateRelationFields({
+        playerId: relation.playerId,
+        accountId: relation.accountId,
+        expectedVersion: relation.syncVersion,
+        [field]: value,
+      } as Parameters<typeof updateRelationFields>[0])
+      antdMessage.success('已同步至企微')
+    } catch (error) {
+      antdMessage.error(error instanceof Error ? error.message : '同步失败，请重试')
+    }
   }
 
   const status = STATUS_LABEL[relation.relationStatus]
@@ -71,6 +77,7 @@ function RelationFields({ relation }: { relation: PlayerRelation }) {
       <div className="cf-slot__field">
         <span className="cf-slot__label">描述</span>
         <Input.TextArea
+          key={`description:${relation.description}`}
           size="small"
           defaultValue={relation.description}
           autoSize={{ minRows: 1, maxRows: 4 }}
@@ -83,6 +90,7 @@ function RelationFields({ relation }: { relation: PlayerRelation }) {
       <div className="cf-slot__field">
         <span className="cf-slot__label">标签</span>
         <Select
+          key={`tags:${relation.tagIds.join('|')}`}
           size="small"
           mode="multiple"
           defaultValue={relation.tagIds}
@@ -109,10 +117,12 @@ function RemarkInlineEditor({
   playerId,
   accountId,
   remark,
+  syncVersion,
 }: {
   playerId: string
   accountId: string
   remark: string
+  syncVersion: number
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(remark)
@@ -124,8 +134,12 @@ function RemarkInlineEditor({
 
   const save = () => {
     if (draft !== remark) {
-      updateRelationFields({ playerId, accountId, remark: draft })
-      antdMessage.success('已同步至企微')
+      try {
+        updateRelationFields({ playerId, accountId, remark: draft, expectedVersion: syncVersion })
+        antdMessage.success('已同步至企微')
+      } catch (error) {
+        antdMessage.error(error instanceof Error ? error.message : '同步失败，请重试')
+      }
     }
     setEditing(false)
   }
@@ -191,6 +205,7 @@ function CustomNoteEditor({ playerId, value }: { playerId: string; value: string
 }
 
 function PlayerSlotPanel({ playerId, accountId }: Props) {
+  const session = usePermissionSession()
   const [version, setVersion] = useState(0)
   useEffect(() => subscribePlayerCenter(() => setVersion((v) => v + 1)), [])
 
@@ -204,11 +219,13 @@ function PlayerSlotPanel({ playerId, accountId }: Props) {
         new Set(
           getRelationsByPlayer(playerId)
             .map((r) => r.accountId)
-            .filter((id) => id !== accountId),
+            .filter(
+              (id) => id !== accountId && session.visibleAccountIds.includes(id),
+            ),
         ),
       ).sort(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [playerId, accountId, version],
+    [playerId, accountId, version, session.visibleAccountIds],
   )
 
   if (!profile) {
@@ -244,7 +261,7 @@ function PlayerSlotPanel({ playerId, accountId }: Props) {
         <Alert
           type="warning"
           showIcon
-          message="已被管家删除,继续接待请确认意图"
+          message="该好友已被管家删除，重新添加前禁止继续接待"
           style={{ marginBottom: 12 }}
         />
       ) : null}
@@ -262,6 +279,7 @@ function PlayerSlotPanel({ playerId, accountId }: Props) {
                 playerId={playerId}
                 accountId={accountId}
                 remark={relation.remark}
+                syncVersion={relation.syncVersion}
               />
             ) : (
               <Text type="secondary">未设置备注</Text>

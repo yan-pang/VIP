@@ -1,0 +1,14 @@
+.cf-player-center {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cf-table-row--interactive {
+  cursor: pointer;
+}
+
+.cf-table-row--selected > td,
+.cf-table-row--selected:hover > td {
+  background: var(--cf-primary-light) !important;
+}

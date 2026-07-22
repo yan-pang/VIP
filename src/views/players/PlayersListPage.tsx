@@ -6,7 +6,7 @@
  *   - 列表纯只读、不展开、点行不跳转;行高一致
  *   - 行尾仅一个操作:查看完整档案(跳详情页)
  *   - 关系级细节(备注 / 描述 / 删除时间)不在主表展示,去详情页跨号关系 tab 看
- *   - "查看会话"行操作移除,通过详情页"会话记录" tab 浏览
+ *   - "查看会话"行操作移除,通过详情页"跨号关系与会话" tab 浏览
  *   - 关系状态分类切换语义 = "至少有一条该状态关系的玩家"
  *   - 筛选语义统一为"该玩家任一可见关系命中即纳入"
  */
@@ -24,10 +24,11 @@ import {
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import GenderBadge from '../../components/common/GenderBadge'
 import { findAccount, wechatAccounts } from '../../services/chatflowMock'
+import { usePermissionSession } from '../../services/permissionMock'
 import {
   getPlayersAggregatedView,
   getTagsByIds,
@@ -36,6 +37,7 @@ import {
 } from '../../services/playerCenterMock'
 import type { PlayerAggregatedView } from '../../services/playerCenterMock'
 import type { RelationStatus } from '../../types/playerCenter'
+import '../../styles/PlayerCenter.scss'
 
 const { Text } = Typography
 
@@ -157,6 +159,7 @@ function matchesNonStatusFilter(view: PlayerAggregatedView, filter: FilterState)
 
 function PlayersListPage() {
   const navigate = useNavigate()
+  const session = usePermissionSession()
   const [searchParams, setSearchParams] = useSearchParams()
   // 初值从 URL query 还原(惰性);后续变更回写 URL
   const [filter, setFilter] = useState<FilterState>(() => parseFilterFromUrl(searchParams))
@@ -164,13 +167,34 @@ function PlayersListPage() {
   const [page, setPage] = useState(() => parsePage(searchParams))
   const [pageSize, setPageSize] = useState(() => parsePageSize(searchParams))
   const [version, setVersion] = useState(0)
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+  const lastWrittenQueryRef = useRef(searchParams.toString())
+  const applyingExternalQueryRef = useRef(false)
 
   useEffect(() => {
     return subscribePlayerCenter(() => setVersion((v) => v + 1))
   }, [])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const allViews = useMemo(() => getPlayersAggregatedView(), [version])
+  // 同一路由内也可能由综合搜索写入新的标签 query；不能只在首次挂载解析 URL。
+  useEffect(() => {
+    const currentQuery = searchParams.toString()
+    if (currentQuery === lastWrittenQueryRef.current) return
+    applyingExternalQueryRef.current = true
+    setFilter(parseFilterFromUrl(searchParams))
+    setSort(parseSortFromUrl(searchParams))
+    setPage(parsePage(searchParams))
+    setPageSize(parsePageSize(searchParams))
+  }, [searchParams])
+
+  useEffect(() => setSelectedPlayerId(null), [filter, page, pageSize])
+
+  const allViews = useMemo(
+    () => {
+      void version
+      return getPlayersAggregatedView(session.visibleAccountIds)
+    },
+    [version, session.visibleAccountIds],
+  )
 
   // 非状态筛选后的中间集 — 用于状态分类计数与最终结果
   const passNonStatus = useMemo(
@@ -205,6 +229,10 @@ function PlayersListPage() {
 
   // 筛选 / 分类 / 排序 / 分页态实时回写 URL(replaceState,默认值省略,保持链接干净)
   useEffect(() => {
+    if (applyingExternalQueryRef.current) {
+      applyingExternalQueryRef.current = false
+      return
+    }
     const next = new URLSearchParams()
     if (filter.playerId) next.set('pid', filter.playerId)
     if (filter.nickname) next.set('nick', filter.nickname)
@@ -220,7 +248,13 @@ function PlayersListPage() {
     if (page !== 1) next.set('p', String(page))
     if (pageSize !== 20) next.set('ps', String(pageSize))
     // 串相同则跳过:setSearchParams 在 location 变化后会换新引用,无此保护会触发死循环
-    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true })
+    const nextQuery = next.toString()
+    if (nextQuery !== searchParams.toString()) {
+      lastWrittenQueryRef.current = nextQuery
+      setSearchParams(next, { replace: true })
+    } else {
+      lastWrittenQueryRef.current = nextQuery
+    }
   }, [filter, sort, page, pageSize, searchParams, setSearchParams])
   const total = sorted.length
   const pageData = useMemo(
@@ -232,10 +266,12 @@ function PlayersListPage() {
     label: t.deprecated ? `${t.label}(已废弃)` : t.label,
     value: t.id,
   }))
-  const accountOptions = wechatAccounts.map((a) => ({
+  const accountOptions = wechatAccounts
+    .filter((account) => session.visibleAccountIds.includes(account.id))
+    .map((a) => ({
     label: `${a.shortName}${a.status !== 'online' ? ` · ${a.status === 'banned' ? '封禁' : '离线'}` : ''}`,
     value: a.id,
-  }))
+    }))
 
   const columns: ColumnsType<PlayerAggregatedView> = [
     {
@@ -399,7 +435,7 @@ function PlayersListPage() {
   }
 
   return (
-    <section style={{ padding: 16, background: '#F5F5F5', minHeight: '100%' }}>
+    <section className="cf-player-center" style={{ padding: 16, background: '#F5F5F5' }}>
       <Typography.Title level={4} style={{ marginTop: 0 }}>
         玩家管理
       </Typography.Title>
@@ -509,6 +545,14 @@ function PlayersListPage() {
         dataSource={pageData}
         scroll={{ x: 1140 }}
         size="small"
+        rowClassName={(record) =>
+          `cf-table-row--interactive${
+            selectedPlayerId === record.playerId ? ' cf-table-row--selected' : ''
+          }`
+        }
+        onRow={(record) => ({
+          onClick: () => setSelectedPlayerId(record.playerId),
+        })}
         onChange={(_pag, _filters, sorter) => {
           const s = Array.isArray(sorter) ? sorter[0] : sorter
           const key = s?.order ? String(s.columnKey ?? '') : ''
@@ -531,7 +575,11 @@ function PlayersListPage() {
           },
         }}
         locale={{
-          emptyText: <Empty description="未找到匹配的玩家" />,
+          emptyText: (
+            <Empty description="未找到匹配的玩家">
+              <Button size="small" onClick={handleClearFilter}>清空筛选</Button>
+            </Empty>
+          ),
         }}
       />
     </section>

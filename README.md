@@ -1,80 +1,62 @@
-> **从 template 新建项目?** 先按 [TEMPLATE-SETUP.md](TEMPLATE-SETUP.md) 走完初始化清单,然后删掉那份文件和本行提示。
+# ChatFlow
 
-# vip
+ChatFlow 是面向游戏 VIP 私域运营的客服后台原型，聚合多个企业微信账号的玩家会话，并提供玩家档案、客服协作、云电脑/RPA 运维、风控和权限管理。
 
-`vip` 是一个中文优先、文档驱动的前端原型长期模板。
+## 当前实现
 
-## 这个项目怎么用
+- React 18、Vite、Ant Design、TypeScript。
+- 本地 Mock 覆盖 `/workbench`、`/control`、`/players`、`/messages`、`/ops-admin/*` 和 `/permission/agents`。
+- 真实链路预期接入企业微信会话存档 API、阿里云 RPA/无影云、飞书身份和项目数据服务。
+- 当前 Mock 已实现硬性风控校验、RPA 待发队列、可逆账号禁用、多 `corpId` 身份键、服务层权限校验与乐观锁示例。
 
-1. 运行 `npm install`
-2. 运行 `npm run dev`
-3. 直接告诉 Claude 你要做什么,或说"继续 `<domain>`"
-4. 如果要新建领域,运行 `npm run new:domain -- <domain-name>`
-5. 如果一开始就确定要产出交付物,再加 `--delivery`
-
-AI 的阶段编排、读取顺序和冲突裁决统一由 `.claude/agents/guide-agent.md` 负责。规则细节见 `CLAUDE.md`。
-
-## 项目固定分层
-
-```text
-product-design-kit/   规范库(AI 读,回答"应该怎么做")
-project/              项目状态与领域文档(回答"当前做到哪了")
-  ui-brand.md         项目级默认设计规范(长期稳定)
-  overview.md         项目总览与状态
-  research/           项目级调研(跨领域、按迭代版本)
-  tech/               项目级研发设计(跨领域、按迭代版本)
-  delivery/           版本级对外交付产物(v1.x/,AI 生成不手改)
-  domains/<domain>/   业务领域长期资产
-src/                  前端代码实现
-.claude/              machine-only 总控与阶段 skills
-scripts/              本地脚手架
-```
-
-## 领域目录怎么放
-
-```text
-project/domains/<domain>/
-  design.md                 产品设计(给 AI / demo 实现)
-  delivery/                 领域长期交付资产
-    prd.md                  领域 PRD(权威源,持续演进)
-    test/
-      strategy.md
-      cases.md
-```
-
-业务领域只放产品设计和领域长期资产。跨领域的调研放 `project/research/`,跨领域的研发设计放 `project/tech/`。
-
-## 版本交付怎么走
-
-日常维护领域 PRD,发版时让 AI 基于 git diff 识别变更,按 `product-design-kit/design/release-prd-spec.md` 从各单一事实源**组装**一份 release-prd(完整快照 + 本版变更摘要)。
-
-### 工作流
-
-1. **日常**:在各领域 `delivery/prd.md` 里持续加 / 改条目,每条用稳定编号 `P-XXX`、二级标题格式 `## P-XXX <标题>`,标题下第一行是 `**状态**:` 行(`新增@v1.x` / `修订@v1.x` / `废弃@v1.x`)。详细格式见 `product-design-kit/design/external-prd.md` 的「条目编号规范」。
-2. **发版**:`/deliver v1.1`
-   - AI 用 `git describe --tags --match 'release/v*'` 找上版 tag
-   - 对每个领域 `delivery/prd.md`,用 `git show <base>:<path>` 拿到 base 版本,按 `## P-XXX` 切分对比
-   - 识别本版的新增 / 修订 / 废弃条目,按领域聚合
-   - 把清单反向确认给你看
-3. **确认**后,AI 按 `release-prd-spec.md` 12 章结构生成 `project/delivery/v1.1/release-prd.md` 和 `test-plan.md`:§7 详细需求 = 完整摘录当前全部生效条目(快照),顶部「本版变更摘要」+ 条目状态标记标出本版改动。各章节从单一事实源组装(调研→`research/`、设计→`design.md`、需求→领域 PRD),不手写新增正文
-4. **打 tag**:`git tag release/v1.1`,作为下一版的 base
-
-### 关键约束
-
-- release-prd 是**生成产物**,不要手动编辑。改动请回到领域 PRD 再重新触发 `/deliver`。
-- 废弃条目**不要删**,打 `废弃@v1.x` 标记保留;删除会让下一版 diff 失去锚点。
-- 首版发布没有上版 tag,所有现有条目都会被识别为"新增@本版"。
-
-## 常用命令
+## 本地运行
 
 ```bash
-npm run new:domain -- <domain-name> [--delivery]
-npm run check
+npm install
+npm run dev
 ```
 
-## 当前状态入口
+默认开发服务监听 `127.0.0.1:1219`。构建单文件演示版：
 
-- 项目总览:`project/overview.md`
-- 项目级视觉规范:`project/ui-brand.md`
+```bash
+npm run build:single
+```
 
-`/catalog` 只保留为通用列表页业务示例,用来演示 starter 当前的页面骨架。
+## 质量检查
+
+```bash
+npm test
+npm run check
+npm audit
+```
+
+`npm run check` 会依次执行 ESLint、Vitest 和生产构建。CI 使用相同入口。
+
+## 文档入口与权威顺序
+
+1. [project/TASKS.md](project/TASKS.md)：当前状态和下一步。
+2. [project/overview.md](project/overview.md)：项目地图与领域入口。
+3. `project/domains/<domain>/design.md`：当前稳定设计。
+4. `project/domains/<domain>/decisions.md`：追加式决策记录；若与设计冲突，以更新日期更晚且明确标注“覆盖”的决定为准。
+5. [project/roadmap.md](project/roadmap.md)：版本范围与唯一条目统计。
+
+已退役的领域 `delivery/prd.md` 和手工测试文档不再作为当前事实源；交付版本需要时，从稳定设计、决策记录和自动化测试结果组装到 `project/delivery/v1.x/`。
+
+## 目录
+
+```text
+project/                 项目状态、路线图、调研与领域设计
+project/domains/         chat-workbench / player-center / ops-admin / permission
+src/                     前端与本地 Mock 实现
+src/services/*.test.ts   自动化契约测试
+scripts/new-domain.mjs   领域目录脚手架
+product-design-kit/      通用设计规范库
+```
+
+新建领域：
+
+```bash
+npm run new:domain -- <domain-name>
+```
+
+脚手架会同时创建 `design.md`、`decisions.md` 和领域 README；是否生成交付目录由 `--delivery` 控制。

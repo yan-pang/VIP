@@ -10,32 +10,65 @@
  */
 import {
   CheckOutlined,
+  ClockCircleOutlined,
   ExclamationCircleFilled,
   FileOutlined,
   LoadingOutlined,
   RollbackOutlined,
 } from '@ant-design/icons'
-import { Image, Modal, Tooltip } from 'antd'
+import { App as AntdApp, Image, Tooltip } from 'antd'
+import type { ReactNode } from 'react'
 import type { Message, MessageAttachment } from '../../types/chat'
 import { findAgent, findPlayer } from '../../services/chatflowMock'
 import { formatFullDateTime } from './messageTime'
 
 interface MessageBubbleProps {
   message: Message
+  /** 综合搜索跳转后的目标态 */
+  highlighted?: boolean
+  /** 只读消息筛选时需要高亮的正文关键词 */
+  highlightText?: string
   /** 失败气泡(rpa_exception)点击 → 打开失败详情抽屉(仅 chat-workbench 用) */
   onClickFailed?: (msg: Message) => void
   /** 悬停出「撤回」按钮 → 撤回(仅 chat-workbench 用,readOnly 时禁用) */
   onRecall?: (msg: Message) => void
+  canRecallMessage?: (msg: Message) => boolean
   /** 只读模式:无右键菜单、失败气泡不可点 */
   readOnly?: boolean
 }
 
 function MessageBubble({
   message,
+  highlighted = false,
+  highlightText,
   onClickFailed,
   onRecall,
+  canRecallMessage,
   readOnly = false,
 }: MessageBubbleProps) {
+  const { modal } = AntdApp.useApp()
+  const renderHighlightedText = (text: string): ReactNode => {
+    const query = highlightText?.trim().toLocaleLowerCase()
+    if (!query) return text
+    const lowerText = text.toLocaleLowerCase()
+    const nodes: ReactNode[] = []
+    let cursor = 0
+    let matchIndex = lowerText.indexOf(query)
+    while (matchIndex >= 0) {
+      if (matchIndex > cursor) nodes.push(text.slice(cursor, matchIndex))
+      const end = matchIndex + query.length
+      nodes.push(
+        <mark className="cf-msg__text-highlight" key={`${matchIndex}-${end}`}>
+          {text.slice(matchIndex, end)}
+        </mark>,
+      )
+      cursor = end
+      matchIndex = lowerText.indexOf(query, cursor)
+    }
+    if (cursor < text.length) nodes.push(text.slice(cursor))
+    return nodes.length ? nodes : text
+  }
+
   // 系统分割消息(跨轮次会话标记):居中无气泡,浅底药丸
   if (message.direction === 'system') {
     return (
@@ -57,15 +90,15 @@ function MessageBubble({
     message.direction === 'outgoing' &&
     message.status === 'sent' &&
     !message.recalled &&
+    (canRecallMessage?.(message) ?? true) &&
     !!onRecall
 
   const handleRecall = () => {
     if (!canRecall || !onRecall) return
-    Modal.confirm({
+    modal.confirm({
       title: '撤回消息',
-      content:
-        'V1 阶段撤回需要在云桌面手动操作。点击确认将跳转到企微号控制台,你可以在那里的云桌面里手动撤回该条消息。',
-      okText: '前往控制台',
+      content: '确认后将提交撤回请求。普通客服只能撤回自己发送的消息，主管可按权限处理团队消息。',
+      okText: '确认撤回',
       cancelText: '取消',
       onOk: () => onRecall(message),
     })
@@ -96,7 +129,8 @@ function MessageBubble({
   }
 
   const renderContent = () => {
-    // 图文/多附件合并消息:图片网格 + 文件/视频卡片 + 文字同框
+    if (message.recalled) return <span className="cf-text-tertiary">消息已撤回</span>
+    // 兼容历史图文/多附件合并消息；新发送已按单条消息拆分。
     if (message.attachments?.length) {
       const images = message.attachments.filter((a) => a.type === 'image')
       const others = message.attachments.filter((a) => a.type !== 'image')
@@ -112,7 +146,9 @@ function MessageBubble({
             </div>
           )}
           {others.map(renderNonImageAttachment)}
-          {message.text && <div className="cf-msg__text">{message.text}</div>}
+          {message.text && (
+            <div className="cf-msg__text">{renderHighlightedText(message.text)}</div>
+          )}
         </div>
       )
     }
@@ -151,11 +187,21 @@ function MessageBubble({
         </a>
       )
     }
-    return message.text
+    if (message.contentType === 'link' && message.text) {
+      return <a href={message.text} target="_blank" rel="noreferrer">{renderHighlightedText(message.text)}</a>
+    }
+    if (message.contentType === 'unsupported') {
+      return <span className="cf-text-tertiary">[暂不支持的消息类型：{message.unsupportedLabel ?? '未知'}]</span>
+    }
+    return renderHighlightedText(message.text ?? '')
   }
 
   return (
-    <div className={`cf-msg cf-msg--${message.direction}`}>
+    <div
+      className={`cf-msg cf-msg--${message.direction}${highlighted ? ' is-highlighted' : ''}`}
+      data-message-id={message.id}
+      aria-current={highlighted ? 'true' : undefined}
+    >
       <div className="cf-msg__sender">
         <span>{senderName}</span>
         {/* 悬停时原地把 HH:MM 换成完整日期时间(不用 Tooltip) */}
@@ -187,6 +233,11 @@ function MessageBubble({
         </div>
         <div className="cf-msg__status">
           {message.direction === 'outgoing' && message.status === 'sending' && <LoadingOutlined />}
+          {message.direction === 'outgoing' && message.status === 'queued' && (
+            <Tooltip title="待发送：RPA 或企微恢复后自动重试">
+              <ClockCircleOutlined style={{ color: '#d48806' }} />
+            </Tooltip>
+          )}
           {message.direction === 'outgoing' && message.status === 'sent' && (
             <CheckOutlined style={{ color: '#8C8C8C' }} />
           )}

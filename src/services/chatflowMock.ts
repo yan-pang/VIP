@@ -6,6 +6,7 @@ import type {
   Agent,
   Conversation,
   Message,
+  MessageContentType,
   Player,
   WechatAccount,
 } from '../types/chat'
@@ -23,24 +24,30 @@ export const agents: Agent[] = [
 export const wechatAccounts: WechatAccount[] = [
   {
     id: 'wx_xiaoqin',
+    corpId: 'ww_cg_vip_cn',
     shortName: '小琴号',
     status: 'online',
+    enabled: true,
     unreadCount: 3,
     lastActiveAt: '2026-05-18T15:42:00+08:00',
     desktopId: 'desk_001',
   },
   {
     id: 'wx_xiaobei',
+    corpId: 'ww_cg_vip_cn',
     shortName: '小贝号',
     status: 'offline',
+    enabled: true,
     unreadCount: 0,
     lastActiveAt: '2026-05-17T22:10:00+08:00',
     desktopId: 'desk_002',
   },
   {
     id: 'wx_xiaojuan',
+    corpId: 'ww_cg_overseas',
     shortName: '小娟号',
     status: 'banned',
+    enabled: true,
     unreadCount: 0,
     lastActiveAt: '2026-05-15T11:30:00+08:00',
     desktopId: 'desk_003',
@@ -121,7 +128,7 @@ export const conversations: Conversation[] = [
     lastMessagePreview: '这个优惠券怎么用?',
     lastMessageAt: '2026-05-18T15:40:00+08:00',
     createdAt: '2026-05-18T14:00:00+08:00',
-    playerHasDeletedFriendship: false,
+    relationStatus: 'normal',
   },
   {
     id: 'c_002',
@@ -140,7 +147,7 @@ export const conversations: Conversation[] = [
     lastMessagePreview: '在吗 我充值后没到账',
     lastMessageAt: '2026-05-18T15:38:00+08:00',
     createdAt: '2026-05-14T10:00:00+08:00',
-    playerHasDeletedFriendship: false,
+    relationStatus: 'normal',
   },
   {
     id: 'c_003',
@@ -157,7 +164,7 @@ export const conversations: Conversation[] = [
     lastMessagePreview: '好的谢谢',
     lastMessageAt: '2026-05-18T11:55:00+08:00',
     createdAt: '2026-05-18T11:20:00+08:00',
-    playerHasDeletedFriendship: false,
+    relationStatus: 'normal',
   },
   {
     id: 'c_004',
@@ -174,7 +181,7 @@ export const conversations: Conversation[] = [
     lastMessagePreview: '明天再联系你',
     lastMessageAt: '2026-05-18T13:00:00+08:00',
     createdAt: '2026-05-18T09:50:00+08:00',
-    playerHasDeletedFriendship: false,
+    relationStatus: 'normal',
   },
   {
     id: 'c_005',
@@ -191,7 +198,7 @@ export const conversations: Conversation[] = [
     lastMessagePreview: '上次问题处理好了吗?',
     lastMessageAt: '2026-05-17T16:30:00+08:00',
     createdAt: '2026-05-17T15:30:00+08:00',
-    playerHasDeletedFriendship: true,
+    relationStatus: 'removed_by_player',
   },
   {
     id: 'c_006',
@@ -208,7 +215,7 @@ export const conversations: Conversation[] = [
     lastMessagePreview: '感谢咨询,有需要随时找我',
     lastMessageAt: '2026-05-16T11:20:00+08:00',
     createdAt: '2026-05-16T09:50:00+08:00',
-    playerHasDeletedFriendship: false,
+    relationStatus: 'normal',
   },
 ]
 
@@ -320,6 +327,7 @@ export const messages: Message[] = [
     conversationId: 'c_002',
     direction: 'system',
     contentType: 'system',
+    systemEvent: 'conversation_ended',
     text: '本次会话已结束 · 2026-05-14 18:00',
     senderId: 'system',
     createdAt: '2026-05-14T18:00:00+08:00',
@@ -330,6 +338,7 @@ export const messages: Message[] = [
     conversationId: 'c_002',
     direction: 'system',
     contentType: 'system',
+    systemEvent: 'player_reopened',
     text: '玩家于 2026-05-18 15:38 重新发起会话',
     senderId: 'system',
     createdAt: '2026-05-18T15:37:30+08:00',
@@ -472,6 +481,7 @@ export const messages: Message[] = [
     conversationId: 'c_005',
     direction: 'system',
     contentType: 'system',
+    systemEvent: 'conversation_ended',
     text: '本次会话已结束 · 2026-05-17 16:35',
     senderId: 'system',
     createdAt: '2026-05-17T16:35:00+08:00',
@@ -532,15 +542,13 @@ export const messages: Message[] = [
     conversationId: 'c_006',
     direction: 'system',
     contentType: 'system',
+    systemEvent: 'conversation_ended',
     text: '本次会话已结束 · 2026-05-16 11:25',
     senderId: 'system',
     createdAt: '2026-05-16T11:25:00+08:00',
     status: 'sent',
   },
 ]
-
-/** 简单的违禁词库(本地 Mock,真实从 ops-admin 同步) */
-export const forbiddenWords: string[] = ['退款承诺', '保证最低价', '官方授权', '返利']
 
 /** 工具函数:按 conversationId 取消息 */
 export const getMessagesByConversation = (
@@ -557,10 +565,10 @@ export const findPlayer = (id: string) => players.find((p) => p.id === id)
 export const findAgent = (id: string) => agents.find((a) => a.id === id)
 
 /**
- * Mock 发送结果模拟器(无后端的本地概率分布)
+ * Mock 单个 RPA 混发任务中某一条子消息的发送结果分布。
  * 55% 成功 / 15% RPA 异常 / 10% 删好友 / 10% 速率上限 / 5% 违禁词后端兜底 / 5% 其它
  */
-export function simulateSendOutcome(): {
+export function simulateSendOutcome(contentType: MessageContentType = 'text'): {
   status: 'sent'
 } | {
   status: 'failed'
@@ -605,6 +613,17 @@ export function simulateSendOutcome(): {
     }
   }
   if (r < 0.95) {
+    if (!['text', 'link', 'emoji'].includes(contentType)) {
+      return {
+        status: 'failed',
+        failure: {
+          category: 'other',
+          code: 'ATTACHMENT_UPLOAD_FAILED',
+          message: '附件上传失败，请重试当前消息',
+          executedAt: new Date().toISOString(),
+        },
+      }
+    }
     return {
       status: 'failed',
       failure: {

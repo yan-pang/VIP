@@ -4,7 +4,9 @@
  */
 
 /** 关系状态:三态枚举 */
-export type RelationStatus = 'normal' | 'removed_by_agent' | 'removed_by_player'
+import type { RelationStatus } from './chat'
+
+export type { RelationStatus } from './chat'
 
 /** 微信性别(企微好友资料;unknown 表示未设置) */
 export type WechatGender = 'male' | 'female' | 'unknown'
@@ -35,6 +37,9 @@ export interface PlayerRelation {
   /** 复合主键 (playerId, accountId) */
   playerId: string
   accountId: string
+  /** 企业微信外部联系人身份键；必须与 corpId 联合使用。 */
+  corpId: string
+  externalUserId: string
   /** 关系级备注 */
   remark: string
   /** 关系级描述(多行) */
@@ -49,6 +54,10 @@ export interface PlayerRelation {
   updatedAt: string
   /** 删除时间 ISO,仅非 normal 时有值 */
   deletedAt?: string
+  /** 外部同步乐观锁版本。 */
+  syncVersion: number
+  syncStatus: 'synced' | 'pending' | 'conflict' | 'failed'
+  lastSyncedAt?: string
 }
 
 /** 会话索引(player-center 反查 chat-workbench 用,不重存消息) */
@@ -93,6 +102,7 @@ export interface RelationEditPayload {
   remark?: string
   description?: string
   tagIds?: string[]
+  expectedVersion?: number
 }
 
 /** 自定义信息编辑负载 */

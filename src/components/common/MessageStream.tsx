@@ -8,7 +8,7 @@
  * system 轮次分隔消息(「本次会话已结束」等)按原样渲染,不参与日期分组;
  * 日期分割线只在**非 system 消息**跨自然日时插入。
  *
- * 轮次边界合并:相邻的「本次会话已结束」+「玩家重新发起 / 客服主动发起」两条系统条
+ * 轮次边界合并：相邻的「本次会话已结束」+「玩家重新发起 / 客服重新联系」两条系统条
  * 合成一条边界(`会话已结束 HH:MM · 玩家 MM-DD HH:MM 重新发起`);合并条已内联新一轮
  * 日期,后续同日消息不再重复插日期线。单独出现的重开条同理内联日期、抑制紧随日期线。
  */
@@ -18,26 +18,49 @@ import { dayKey, formatDateLabel, formatMonthDayTime } from './messageTime'
 
 interface MessageStreamProps {
   messages: Message[]
+  /** 综合搜索跳转时需要定位并短暂高亮的消息 */
+  highlightMessageId?: string | null
+  /** 只读消息筛选命中词 */
+  highlightText?: string
   /** 只读模式透传给 MessageBubble(player-center Drawer 用) */
   readOnly?: boolean
   onClickFailed?: (msg: Message) => void
   onRecall?: (msg: Message) => void
+  canRecallMessage?: (msg: Message) => boolean
 }
 
 /** 「本次会话已结束」边界条 */
 function isEndedBoundary(m: Message): boolean {
-  return m.direction === 'system' && typeof m.text === 'string' && m.text.includes('本次会话已结束')
+  return m.direction === 'system' && (
+    m.systemEvent === 'conversation_ended'
+    || (!m.systemEvent && typeof m.text === 'string' && m.text.includes('本次会话已结束'))
+  )
 }
 
-/** 「玩家重新发起 / 客服主动发起」重开条 → 提取发起方与动作短语;非重开条返回 null */
+/** 「玩家重新发起 / 客服主动发起或重新联系」重开条 → 提取发起方与动作短语；非重开条返回 null */
 function reopenKind(m: Message): { actor: string; action: string } | null {
   if (m.direction !== 'system' || typeof m.text !== 'string') return null
+  if (m.systemEvent === 'player_reopened') return { actor: '玩家', action: '重新发起' }
+  if (m.systemEvent === 'agent_reopened') {
+    if (m.text.includes('主动发起')) return { actor: '客服', action: '主动发起' }
+    return { actor: '客服', action: '重新联系' }
+  }
+  if (m.systemEvent) return null
   if (m.text.includes('重新发起')) return { actor: '玩家', action: '重新发起' }
+  if (m.text.includes('重新联系')) return { actor: '客服', action: '重新联系' }
   if (m.text.includes('主动发起')) return { actor: '客服', action: '主动发起' }
   return null
 }
 
-function MessageStream({ messages, readOnly, onClickFailed, onRecall }: MessageStreamProps) {
+function MessageStream({
+  messages,
+  highlightMessageId,
+  highlightText,
+  readOnly,
+  onClickFailed,
+  onRecall,
+  canRecallMessage,
+}: MessageStreamProps) {
   const nodes: React.ReactNode[] = []
   let lastDay = ''
 
@@ -45,9 +68,12 @@ function MessageStream({ messages, readOnly, onClickFailed, onRecall }: MessageS
     <MessageBubble
       key={m.id}
       message={m}
+      highlighted={m.id === highlightMessageId}
+      highlightText={highlightText}
       readOnly={readOnly}
       onClickFailed={onClickFailed}
       onRecall={onRecall}
+      canRecallMessage={canRecallMessage}
     />
   )
 

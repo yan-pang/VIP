@@ -2,10 +2,9 @@
  * /players/:id 玩家详情页(D2 页面 2)
  * - 面包屑 + 返回玩家管理按钮
  * - 页头(头像 / 昵称 / playerId / 跨号汇总徽章)
- * - 4 个 tab(基础 / 跨号关系 / 会话记录 / 游戏数据 v1.1+ 占位)
+ * - 3 个 tab(基础 / 跨号关系与会话 / 游戏数据 v1.1+ 占位)
  * - 基础 tab:单一"自定义信息"文本域(简化自 3 字段)
- * - 跨号关系 tab:内联编辑(备注 Input / 描述 Textarea / 标签 Select 多选)
- * - 会话记录 tab:支持企微号筛选
+ * - 跨号关系与会话 tab:内联编辑关系字段,并在同一行查看会话或主动发起
  * - 编辑通过 mock store 广播刷新
  */
 import { ArrowLeftOutlined, CopyOutlined } from '@ant-design/icons'
@@ -30,6 +29,8 @@ import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { findAccount } from '../../services/chatflowMock'
+import { usePermissionSession } from '../../services/permissionMock'
+import { useWorkbenchRuntime } from '../../services/workbenchRuntimeMock'
 import {
   getConversationIndex,
   getProfile,
@@ -44,6 +45,7 @@ import ConversationDrawer, {
   type ConversationDrawerContext,
 } from '../../components/common/ConversationDrawer'
 import GenderBadge from '../../components/common/GenderBadge'
+import '../../styles/PlayerCenter.scss'
 
 const { Text, Title } = Typography
 const TAB_KEYS = ['basic', 'relations', 'game'] as const
@@ -63,6 +65,8 @@ function resolveInitialTab(raw: string | null): TabKey {
 
 function PlayerDetailPage() {
   const { playerId = '' } = useParams()
+  const session = usePermissionSession()
+  const runtime = useWorkbenchRuntime()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [tab, setTab] = useState<TabKey>(() => resolveInitialTab(searchParams.get('tab')))
@@ -75,10 +79,20 @@ function PlayerDetailPage() {
   const profile = useMemo(() => getProfile(playerId), [playerId, version])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const relations = useMemo(() => getRelationsByPlayer(playerId), [playerId, version])
+  const visibleRelations = useMemo(
+    () => relations.filter((relation) => session.visibleAccountIds.includes(relation.accountId)),
+    [relations, session.visibleAccountIds],
+  )
   const sessions = useMemo(
-    () => getConversationIndex().filter((c) => c.playerId === playerId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [playerId, version],
+    () => {
+      void runtime
+      return getConversationIndex().filter(
+        (conversation) =>
+          conversation.playerId === playerId
+          && session.visibleAccountIds.includes(conversation.accountId),
+      )
+    },
+    [playerId, runtime, session.visibleAccountIds],
   )
 
   const handleTabChange = (k: string) => {
@@ -99,15 +113,26 @@ function PlayerDetailPage() {
     )
   }
 
-  const visibleRelations = relations
+  if (visibleRelations.length === 0) {
+    return (
+      <section style={{ padding: 24 }}>
+        <Empty description="该玩家不在当前数据权限范围内" />
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <Button onClick={() => navigate('/players')}>返回玩家管理</Button>
+        </div>
+      </section>
+    )
+  }
+
   const totalConvCount = sessions.length
-  const earliestAdd = relations
+  const invisibleRelationCount = relations.length - visibleRelations.length
+  const earliestAdd = visibleRelations
     .map((r) => r.addedAt)
     .sort()
     .at(0)
 
   return (
-    <section style={{ padding: 16, background: '#F5F5F5', minHeight: '100%' }}>
+    <section className="cf-player-center" style={{ padding: 16, background: '#F5F5F5' }}>
       {/* 面包屑 + 返回主页按钮 */}
       <div
         style={{
@@ -171,6 +196,11 @@ function PlayerDetailPage() {
         </div>
         <Space size={8} wrap>
           <Tag color="green">被 {visibleRelations.length} 个企微号添加</Tag>
+          {invisibleRelationCount > 0 && (
+            <Tooltip title="该玩家存在不在你数据权限内的企微号关系，具体数量不予展示">
+              <Tag>存在其他不可见关系</Tag>
+            </Tooltip>
+          )}
           <Tag color="blue">总会话 {totalConvCount}</Tag>
           <Tag>最早添加 {earliestAdd?.slice(0, 10) ?? '-'}</Tag>
         </Space>
@@ -183,7 +213,7 @@ function PlayerDetailPage() {
           {
             key: 'basic',
             label: '基础',
-            children: <BasicTab profile={profile} relations={relations} />,
+            children: <BasicTab profile={profile} relations={visibleRelations} />,
           },
           {
             key: 'relations',
@@ -191,7 +221,7 @@ function PlayerDetailPage() {
             children: (
               <RelationsTab
                 playerId={playerId}
-                relations={relations}
+                relations={visibleRelations}
                 sessions={sessions}
                 onViewConversation={(conversationId) =>
                   setDrawerCtx({ kind: 'conversation', conversationId })
@@ -215,6 +245,7 @@ function PlayerDetailPage() {
       <ConversationDrawer
         open={drawerCtx !== null}
         context={drawerCtx}
+        visibleAccountIds={session.visibleAccountIds}
         onClose={() => setDrawerCtx(null)}
       />
     </section>
@@ -331,12 +362,17 @@ function RelationsTab({
     field: 'remark' | 'description' | 'tagIds',
     value: string | string[],
   ) => {
-    updateRelationFields({
-      playerId: r.playerId,
-      accountId: r.accountId,
-      [field]: value,
-    } as Parameters<typeof updateRelationFields>[0])
-    antdMessage.success('已同步至企微')
+    try {
+      updateRelationFields({
+        playerId: r.playerId,
+        accountId: r.accountId,
+        expectedVersion: r.syncVersion,
+        [field]: value,
+      } as Parameters<typeof updateRelationFields>[0])
+      antdMessage.success('已同步至企微')
+    } catch (error) {
+      antdMessage.error(error instanceof Error ? error.message : '同步失败，请重试')
+    }
   }
 
   const columns: ColumnsType<PlayerRelation> = [
@@ -365,6 +401,7 @@ function RelationsTab({
       width: 220,
       render: (_v, r) => (
         <Input
+          key={`remark:${r.playerId}:${r.accountId}:${r.remark}`}
           defaultValue={r.remark}
           onBlur={(e) => {
             if (e.target.value !== r.remark) handleSave(r, 'remark', e.target.value)
@@ -379,6 +416,7 @@ function RelationsTab({
       width: 260,
       render: (_v, r) => (
         <Input.TextArea
+          key={`description:${r.playerId}:${r.accountId}:${r.description}`}
           defaultValue={r.description}
           autoSize={{ minRows: 1, maxRows: 4 }}
           onBlur={(e) => {
@@ -394,6 +432,7 @@ function RelationsTab({
       width: 220,
       render: (_v, r) => (
         <Select
+          key={`tags:${r.playerId}:${r.accountId}:${r.tagIds.join('|')}`}
           mode="multiple"
           defaultValue={r.tagIds}
           options={tagOptions}
@@ -463,6 +502,7 @@ function RelationsTab({
       fixed: 'right',
       render: (_v, r) => {
         const session = sessionByAccountId.get(r.accountId)
+        const account = findAccount(r.accountId)
         if (session) {
           return (
             <Button size="small" type="link" onClick={() => onViewConversation(session.conversationId)}>
@@ -470,10 +510,20 @@ function RelationsTab({
             </Button>
           )
         }
-        // 无会话:被玩家删除的关系不能主动发起
-        if (r.relationStatus === 'removed_by_player') {
+        // 无会话:任一方删除好友、账号禁用或企微号不可用时不能主动发起
+        if (r.relationStatus !== 'normal') {
           return (
-            <Tooltip title="该玩家已删好友,无法主动发起会话">
+            <Tooltip title="好友关系已断开，重新添加后才能主动发起会话">
+              <Button size="small" type="link" disabled>
+                主动发起
+              </Button>
+            </Tooltip>
+          )
+        }
+        if (!account?.enabled || account?.status === 'banned') {
+          const reason = !account?.enabled ? '该企微号接入已禁用' : '该企微号已封禁'
+          return (
+            <Tooltip title={`${reason},无法主动发起会话`}>
               <Button size="small" type="link" disabled>
                 主动发起
               </Button>

@@ -9,6 +9,7 @@ interface Props {
   conversations: Conversation[]
   selectedId: string | null
   currentAgentId: string
+  visibleAccountIds: string[]
   accountFilter: string[]
   onSelect: (id: string) => void
   onAccountFilterChange: (next: string[]) => void
@@ -38,6 +39,7 @@ function ConversationList({
   conversations,
   selectedId,
   currentAgentId,
+  visibleAccountIds,
   accountFilter,
   onSelect,
   onAccountFilterChange,
@@ -72,7 +74,8 @@ function ConversationList({
   const toggleGroup = (k: ConversationGroupKey) =>
     setCollapsed((prev) => ({ ...prev, [k]: !prev[k] }))
 
-  const allAccountIds = wechatAccounts.map((a) => a.id)
+  const visibleAccounts = wechatAccounts.filter((account) => visibleAccountIds.includes(account.id))
+  const allAccountIds = visibleAccounts.map((a) => a.id)
   const isAllSelected = accountFilter.length === allAccountIds.length
   const isNoneSelected = accountFilter.length === 0
   // 角标:仅当不是"全选"时才展示当前已选数量
@@ -99,7 +102,7 @@ function ConversationList({
       </Checkbox>
       <Divider style={{ margin: '8px 0' }} />
       <div className="cf-conv-list__filter-list">
-        {wechatAccounts.map((a) => (
+        {visibleAccounts.map((a) => (
           <Checkbox
             key={a.id}
             checked={accountFilter.includes(a.id)}

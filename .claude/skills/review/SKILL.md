@@ -16,9 +16,9 @@ argument-hint: [scope]
    - `design.md` 顶部 `## 章节索引` 是否与实际小节一致(新增/改名小节后忘了更新)
    - 是否把原始材料直接大段塞进了 `design.md`;跨领域调研应在 `project/research/`,项目级研发设计应在 `project/tech/`
    - 业务领域下是否错误地保留了 `research.md` 或 `tech/`(新规则下这两个应在项目级目录)
-   - 领域 `delivery/prd.md` 是否正确使用稳定编号,作为版本 `release-prd` 的组装源
+   - 领域 `design.md`、`decisions.md`、路线图条目和自动化测试是否表达同一套稳定规则
    - `project/delivery/v1.x/release-prd.md` 是否被手动编辑(应当是 `/deliver` 生成产物)
-   - `project/delivery/` 最新版本是否与当前领域 PRD 保持一致(漂移要修)
+   - `project/delivery/` 最新版本是否与当前稳定设计、决策和测试结果保持一致（漂移要修）
    - 新增材料出现后,是否错误地把仅交付参考的问题当成 `design` / `build` 阻塞,或反过来漏掉了该走 `breakdown` 的整理
 5. 代码评审时,指出具体文件和具体行为,并尽量关联到 `design.md` 或 `project/ui-brand.md`。
 6. 模板评审时(**按需逐个读取,不一次全读**),确认 `README.md`、`.claude/agents/guide-agent.md`、`project/TASKS.md`、`project/overview.md`、`project/domains/*/decisions.md`、`project/ui-brand.md`、`project/research/README.md`、`project/tech/README.md`、`project/delivery/README.md`、`product-design-kit/design/design-init.md`、`product-design-kit/design/product-design.md`、`product-design-kit/design/external-prd.md`、`product-design-kit/design/test-strategy.md`、`product-design-kit/design/test-cases.md` 和 `.claude/skills/` 是否仍然只指向同一套事实来源。

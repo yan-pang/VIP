@@ -19,6 +19,13 @@
   background: var(--cf-bg-surface);
 }
 
+.cf-control__login-hint {
+  margin: 0 0 12px;
+  color: var(--cf-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .cf-control__left {
   width: 256px;
   flex-shrink: 0;
@@ -53,6 +60,10 @@
   &.is-selected {
     background: var(--cf-primary-light);
     box-shadow: inset 3px 0 0 0 var(--cf-primary);
+  }
+
+  &:disabled {
+    cursor: default;
   }
 
   &-body {
@@ -185,6 +196,18 @@
       }
     }
   }
+}
+
+.cf-control__controls-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a6a6a6;
+  font-size: 12px;
+}
+
+.cf-control__placeholder--evicted {
+  border-color: #6c5727;
 }
 
 .cf-control__empty {

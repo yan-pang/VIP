@@ -13,18 +13,24 @@ export interface Agent {
   activeConversationCount: number
 }
 
-/** 企微号在线状态 */
+/**
+ * 企微客户端状态。封禁同时会在 ops-admin 的风控状态中呈现，但登录状态始终以本字段为准。
+ */
 export type WechatAccountStatus = 'online' | 'offline' | 'banned'
 
 /** 企微号 */
 export interface WechatAccount {
   id: string
+  /** 企业微信企业主体；external_userid 只在同一 corpId 内唯一。 */
+  corpId: string
   /** 号简称(运营内部叫法) */
   shortName: string
   /** 号头像 */
   avatar?: string
-  /** 状态 */
+  /** 企微客户端是否已登录；不代表云桌面投屏或 RPA 执行状态。 */
   status: WechatAccountStatus
+  /** ChatFlow 接入配置是否启用；禁用不删除账号与历史引用。 */
+  enabled: boolean
   /** 该号下未读总和(跨会话) */
   unreadCount: number
   /** 最近活跃时间 */
@@ -52,6 +58,8 @@ export type ConversationStatus = 'queueing' | 'active' | 'ended'
 export type ConversationTag = 'follow_up' | 'important' | 'callback'
 
 /** 会话(企微号 × 玩家) */
+export type RelationStatus = 'normal' | 'removed_by_agent' | 'removed_by_player'
+
 export interface Conversation {
   id: string
   accountId: string
@@ -63,9 +71,9 @@ export interface Conversation {
   assigneeHistory: Array<{
     agentId: string | null
     changedAt: string
-    // V1 取消隐式指派后:显式指派(含主动发起)/ 转接 / 玩家重新激活清空
+    // V1 取消隐式指派后：显式指派（含主动发起 / 重新联系）/ 转接 / 玩家重新激活清空
     reason: 'explicit' | 'transfer' | 'reactivate'
-    /** 显式指派 / 转接时的内部备注(玩家不可见) */
+    /** 系统生成的操作说明，例如客服主动发起或重新联系 */
     note?: string
   }>
   /** 是否置顶(客服个人视图) */
@@ -79,20 +87,24 @@ export interface Conversation {
   lastMessageAt?: string
   /** 创建时间 */
   createdAt: string
-  /** 是否已结束的删好友会话(影响顶部红色横幅) */
-  playerHasDeletedFriendship: boolean
+  /** 玩家×企微号关系状态的会话投影；非 normal 时禁止发送。 */
+  relationStatus: RelationStatus
+  /** 首次消息尚未成功的工作台临时草稿；不得进入搜索、玩家中心和消息管理。 */
+  isProvisional?: boolean
 }
 
 /** 消息发送方向。system 用于跨轮次会话的系统分割消息(结束 / 重新发起 / 主动发起) */
 export type MessageDirection = 'incoming' | 'outgoing' | 'system'
 
 /** 消息状态 */
-export type MessageStatus = 'sending' | 'sent' | 'failed'
+export type MessageStatus = 'queued' | 'sending' | 'sent' | 'failed'
 
-/** 消息内容类型。mixed 用于图文/多附件合并消息(文字 + 一个或多个附件同框) */
-export type MessageContentType = 'text' | 'image' | 'video' | 'file' | 'link' | 'emoji' | 'system' | 'mixed'
+/** 消息内容类型。mixed 仅用于兼容历史图文合并存档，新发送按单条内容拆分。 */
+export type MessageContentType = 'text' | 'image' | 'video' | 'file' | 'link' | 'emoji' | 'system' | 'mixed' | 'unsupported'
 
-/** 图文消息里的单个附件(客服可在草稿区攒多个,连同文字一次发出) */
+export type SystemMessageEvent = 'conversation_ended' | 'player_reopened' | 'agent_reopened' | 'notice'
+
+/** 混发草稿里的单个附件；提交后会拆成独立消息。 */
 export interface MessageAttachment {
   type: 'image' | 'video' | 'file'
   url: string
@@ -106,6 +118,7 @@ export type FailureCategory =
   | 'player_deleted_friendship' // 玩家删好友(会话顶部横幅)
   | 'forbidden_word_backend' // 后端兜底违禁词(只 hover)
   | 'rate_limit_exceeded' // 速率上限(只 hover)
+  | 'risk_blocked' // IP / 封禁 / 接入配置等硬性风控
   | 'other' // 其它(只 hover)
 
 export interface FailureDetail {
@@ -131,11 +144,11 @@ export interface Message {
   contentType: MessageContentType
   /** 文本消息正文 */
   text?: string
-  /** 媒体 URL(单媒体消息;图文合并消息改用 attachments) */
+  /** 单条媒体消息 URL */
   mediaUrl?: string
   mediaName?: string
   mediaSizeBytes?: number
-  /** 图文/多附件合并消息的附件列表(与 text 同框展示) */
+  /** 兼容历史图文合并存档；新发送不再写入 */
   attachments?: MessageAttachment[]
   /** 发送方 id(客服 id 或玩家 id) */
   senderId: string
@@ -145,6 +158,19 @@ export interface Message {
   status: MessageStatus
   /** 失败明细 */
   failure?: FailureDetail
+  /** 客户端生成的幂等键；重试必须复用。 */
+  clientRequestId?: string
+  /** 客服混发时同批拆分消息共享的发送批次 ID。 */
+  sendBatchId?: string
+  /** 历史字段，仅用于兼容已持久化的旧 Mock 数据。 */
+  rpaTaskId?: string
+  /** 已执行次数；排队不计入尝试。 */
+  attemptCount?: number
+  lastAttemptAt?: string
+  /** system 消息的结构化事件类型，轮次切分不得依赖展示文案。 */
+  systemEvent?: SystemMessageEvent
+  /** 无法识别的企微消息类型名称。 */
+  unsupportedLabel?: string
   /** 是否客服已撤回(由会话存档 API 回查后更新) */
   recalled?: boolean
 }
