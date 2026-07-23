@@ -16,10 +16,10 @@
 
 | 领域 | 启用版本 | 设计文档 | 当前交付物 | 定位 |
 | --- | --- | --- | --- | --- |
-| [chat-workbench](domains/chat-workbench/) | v1.0 | [design.md](domains/chat-workbench/design.md) · [decisions.md](domains/chat-workbench/decisions.md) | 本阶段暂不产出 | 客服工作台;V1 核心;代码在 `src/views/workbench` + `src/views/control` |
-| [player-center](domains/player-center/) | v1.0 | [design.md](domains/player-center/design.md) · [decisions.md](domains/player-center/decisions.md) | 本阶段暂不产出 | 玩家中心;`/players` `/players/:id` `/messages` + Drawer + 工作台 slot |
-| [ops-admin](domains/ops-admin/) | v1.0 | [design.md](domains/ops-admin/design.md) · [decisions.md](domains/ops-admin/decisions.md) | 本阶段暂不产出 | 运营管理(企微号与资源绑定、RPA 运行、违禁词、风控与审计) |
-| [permission](domains/permission/) | v1.0 | [design.md](domains/permission/design.md) · [decisions.md](domains/permission/decisions.md) | 本阶段暂不产出 | 权限管理(客服账号、角色、游戏关联、企微号授权);ChatFlow 自维护 |
+| [chat-workbench](domains/chat-workbench/) | v1.0 | [design.md](domains/chat-workbench/design.md) · [decisions.md](domains/chat-workbench/decisions.md) | [长期 PRD](domains/chat-workbench/delivery/prd.md) | 客服工作台;拥有会话接待、消息收发、企微号状态提示和人工介入入口；代码在 `src/views/workbench` |
+| [player-center](domains/player-center/) | v1.0 | [design.md](domains/player-center/design.md) · [decisions.md](domains/player-center/decisions.md) | 长期 PRD 待生成 | 玩家中心;`/players` `/players/:id` `/messages` + Drawer + 工作台 slot |
+| [ops-admin](domains/ops-admin/) | v1.0 | [design.md](domains/ops-admin/design.md) · [decisions.md](domains/ops-admin/decisions.md) | 长期 PRD 待生成 | 运营管理(企微号与资源绑定、RPA 运行、`/control` 投屏与人工接管、违禁词、风控与审计)；控制台代码当前仍在 `src/views/control` |
+| [permission](domains/permission/) | v1.0 | [design.md](domains/permission/design.md) · [decisions.md](domains/permission/decisions.md) | 长期 PRD 待生成 | 权限管理(客服账号、角色、游戏关联、企微号授权);ChatFlow 自维护 |
 | automation | v1.1+ | - | - | 智能路由、自动分配、下班自动回复(未启) |
 | knowledge | v1.2+ | - | - | FAQ、Quick Reply、表情包(未启) |
 | monitor | v1.3+ | - | - | 客服监控、数据看板、报表(未启) |
@@ -36,7 +36,7 @@
 | 项目级研发设计 | `project/tech/` | 按版本命名,如 `v1.0-architecture.md` |
 | 版本对外交付 | `project/delivery/v1.x/` | 每版一子目录,`release-prd.md` 由 `/deliver` 按 `release-prd-spec.md` 组装(快照 + 变更摘要) |
 | 规范来源 | `product-design-kit/` | 只读 |
-| 领域资产 | `project/domains/<domain>/` | `design.md` 保存稳定设计，`decisions.md` 保存取舍；正式交付目录按需生成 |
+| 领域资产 | `project/domains/<domain>/` | `design.md` 是当前事实源，`decisions.md` 保存历史取舍，`delivery/prd.md` 是由 Design 生成的长期对外投影 |
 
 ## 公共能力
 
@@ -48,9 +48,9 @@
 
 | 优先级 | 领域 / 模块 | 原因 |
 | --- | --- | --- |
-| P0 | chat-workbench | V1 主战场:消息收发、会话管理、一机多开 |
+| P0 | chat-workbench | V1 主战场:消息收发、会话管理、状态感知与失败介入入口 |
 | P0 | player-center | V1 核心:玩家档案、企微关系、备注/标签 |
-| P0 | ops-admin | V1 基础:违禁词、企微号-云桌面绑定、初始化 |
+| P0 | ops-admin | V1 基础:企微号-云桌面绑定、控制台投屏与人工接管、违禁词、初始化 |
 | P0 | permission | V1 基础:客服账号、角色、企微号授权(ChatFlow 自维护) |
 | P1 | 外部依赖对齐 | 企微会话存档 API / 无影云 API+视频流 / SCRM 互通(见 roadmap.md) |
 

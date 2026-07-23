@@ -2,7 +2,7 @@
 
 > 默认保存为 `project/domains/<domain>/delivery/test/strategy.md`。  
 > 与 `test/cases.md` 配套使用,先写策略再写详细用例。  
-> 需求 / 规则编号以领域 `delivery/prd.md` 的 `P-XXX` 为主。
+> 需求 / 规则编号引用领域长期 PRD 的 `P-XXX` / `R-XXX-NN`；长期 PRD 由 `design.md` 生成，重新生成后必须复核测试追溯关系。
 
 ## 文档说明
 

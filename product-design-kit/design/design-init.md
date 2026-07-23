@@ -31,14 +31,14 @@
 
 ## 文档边界
 
-- `design.md` 只承接会影响 AI / demo 实现的稳定设计结论,不直接堆原始材料。
+- `design.md` 承接当前有效的稳定业务、页面和交互设计，是领域长期 PRD 的生成事实源；不直接堆原始材料。
 - `design.md` 默认继承 `project/ui-brand.md`;只有领域特有的设计例外才写进 `design.md`。
 - 业务领域下**不再**放 `research.md` 或 `tech/`。跨领域的调研、研发设计放 `project/research/` 和 `project/tech/`。
-- `project/research/` 主要服务后续交付和测试整理,不要求逐项回写 `design.md`。
-- `project/tech/` 中的技术设计默认服务后续交付参考,不要求同步进 `design.md`;只有它会改变 demo 表现时才需要回写。
+- `project/research/` 作为材料与结论来源；其中已经确认且影响产品行为的内容必须回写 `design.md` 后才能进入长期 PRD。
+- `project/tech/` 中只有会改变用户可感知行为、业务限制或异常结果的结论需要以业务语言回写 `design.md`。
 - 如果页面结构、交互或 Mock 方案变化,直接更新 `design.md`。
 - 如果新增结论属于项目级默认设计规范,应更新 `project/ui-brand.md`,而不是分散写进多个领域文档。
-- `project/research/` 不替代领域 `delivery/prd.md` 下的长期 PRD,也不替代版本 `project/delivery/v1.x/` 的对外产物。
+- `project/research/` 不替代 `design.md` 当前事实源，也不替代由 Design 生成的领域长期 PRD 和版本快照。
 - 初始化阶段保留 `# 功能详细描述` 标题,但不提前展开正文。
 
 ## 吸收规则
@@ -47,7 +47,7 @@
 2. 提炼对 PRD / 测试有用的规则、约束、场景和风险
 3. 标记待确认项和后续动作
 4. 如果结论直接影响 demo 设计,直接更新 `design.md`
-5. 需要对外交付时,再把 `project/research/` 中的参考点提炼到领域 `delivery/prd.md`;版本 release-prd 由 `/deliver` 组装
+5. 需要对外交付时，先把已确认且影响产品行为的参考点更新到 `design.md`，再生成领域长期 PRD；版本 release-prd 由 `/deliver` 组装
 
 - 如果材料已经明确只影响某个领域的 demo 设计,可以直接由使用者更新 `design.md`;除非还需要保留交付或测试参考,否则 `project/research/` 无需重复登记。
 - 如果材料属于项目级默认视觉或品牌规范,优先补到 `project/ui-brand.md`。

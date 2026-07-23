@@ -321,6 +321,6 @@ handleTabChange -> 更新当前子页 -> 保留必要上下文
 - `product-design-kit/design/design-init.md`:负责 `design.md` 的初始化阶段。
 - `project/research/`:项目级调研工作台,按迭代版本组织,承接跨领域的材料来源、会议增量、交付参考和待确认问题。
 - `project/tech/`:项目级研发技术设计,按迭代版本组织。
-- `project/domains/<domain>/delivery/prd.md`:领域长期 PRD(权威源,持续演进)。
-- `project/delivery/v1.x/`:版本级对外交付产物,由 `/deliver` 从领域 PRD 组装。
+- `project/domains/<domain>/delivery/prd.md`:由 `design.md` 生成的领域长期业务化投影，持续反映当前态但禁止直接编辑。
+- `project/delivery/v1.x/`:版本级对外交付快照,由 `/deliver` 从长期 PRD、Design 和版本信息组装。
 - `project/overview.md`:负责维护跨领域状态、共享概念、跨领域约定和公共能力。

@@ -46,7 +46,7 @@
 
 > 提炼阶段用它反推 `delivery/*` 还缺什么,进入 `deliver` 阶段前做最后核对。
 
-- 需要补 `delivery/prd.md`:
+- 需要更新 `design.md` 并重新生成长期 PRD:
 - 需要补 `delivery/test/strategy.md`:
 - 需要补 `delivery/test/cases.md`:
 

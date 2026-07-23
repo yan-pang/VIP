@@ -1,26 +1,30 @@
 # 项目级版本化交付
 
-按迭代版本组织的对外交付产物。
+按迭代版本组织的冻结交付产物。本目录不维护当前需求。
 
 ## 目录结构
 
 ```
-v1.0/
-  release-prd.md       本版完整对外 PRD(自包含摘录)
-  test-plan.md         本版集成测试范围与回归说明
-v1.1/
-  ...
+v1.x/
+  chat-workbench-prd.md  客服工作台独立 PRD
+  player-center-prd.md   玩家中心独立 PRD
+  ops-admin-prd.md       运营管理独立 PRD
+  permission-prd.md      权限管理独立 PRD
+  release-prd.md         可选的跨领域完整汇编
+  test-plan.md           本版集成测试范围与回归说明
 ```
 
 ## 职责边界
 
-- 本目录只装"按版本发"的产物;每个 `v1.x/` 是该版本对外交付的快照。
-- 领域事实源在 `project/domains/<domain>/design.md` 与 `decisions.md`，可执行契约由自动化测试补充；历史 `delivery/` 只作快照。
-- `release-prd.md` 由 `/deliver` 从稳定设计、决策和测试结果**组装而成**；内容修订请回到事实源，再重新生成。
+- 每个 `v1.x/` 都是不可反向维护的版本快照；当前四个领域长期 PRD 完成前不生成 V1.0 快照。
+- 领域 `design.md` 是当前业务和产品设计事实源；`domains/<domain>/delivery/prd.md` 是由 Design 生成的长期业务化投影。
+- 领域版本 PRD 与可选的 `release-prd.md` 从长期 PRD、Design、调研、测试和版本信息组装；业务内容修订必须先回到 Design。
 - 打包完版本后建议打 git tag:`release/v1.0`,作为下一版变更识别的基线。
 
 ## 单点权威
 
-- 权威源：领域 `design.md` + `decisions.md` + 自动化契约测试
-- 本目录:发版冻结的历史快照,**不要手动编辑 release-prd.md**
-- 改动规则:改源 → 重新触发 `/deliver <version>` → 重新打 tag
+- 当前事实源：领域 `design.md`
+- 编号与历史：既有长期 PRD、Git 历史和 `decisions.md`
+- 当前对外投影：领域 `delivery/prd.md`，由 Design 生成并禁止直接编辑
+- 本目录：发版冻结的历史快照
+- 改动规则：改 Design → 重新生成长期 PRD → 更新测试追溯 → 生成版本快照 → 打 tag

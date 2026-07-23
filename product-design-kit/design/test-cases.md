@@ -1,7 +1,7 @@
 # 测试用例模板
 
-> 默认保存为 `project/domains/<domain>/delivery/test/cases.md`。  
-> 与 `test/strategy.md` 配套使用,默认复用领域 `delivery/prd.md` 中的需求 / 规则编号(`P-XXX`)。  
+> 默认保存为 `project/domains/<domain>/delivery/test/cases.md`。
+> 与 `test/strategy.md` 配套使用，复用领域长期 PRD 中的需求 / 规则编号；长期 PRD 重新生成后必须检查编号和用例语义仍然一致。
 > 如 `project/tech/` 下有相关版本文件,可结合其中的技术设计补齐前置条件、依赖关系、异常路径和恢复路径。
 
 ## 用例说明

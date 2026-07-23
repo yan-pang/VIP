@@ -36,11 +36,12 @@ npm audit
 
 1. [project/TASKS.md](project/TASKS.md)：当前状态和下一步。
 2. [project/overview.md](project/overview.md)：项目地图与领域入口。
-3. `project/domains/<domain>/design.md`：当前稳定设计。
-4. `project/domains/<domain>/decisions.md`：追加式决策记录；若与设计冲突，以更新日期更晚且明确标注“覆盖”的决定为准。
-5. [project/roadmap.md](project/roadmap.md)：版本范围与唯一条目统计。
+3. `project/domains/<domain>/design.md`：当前业务、页面与交互设计的事实源。
+4. `project/domains/<domain>/delivery/prd.md`：由 Design 生成的长期业务化对外投影，禁止直接编辑。
+5. `project/domains/<domain>/decisions.md`：追加式历史决策与编号追溯，不覆盖当前 Design。
+6. [project/roadmap.md](project/roadmap.md)：版本范围与唯一条目统计。
 
-已退役的领域 `delivery/prd.md` 和手工测试文档不再作为当前事实源；交付版本需要时，从稳定设计、决策记录和自动化测试结果组装到 `project/delivery/v1.x/`。
+交付改动先更新领域 Design，再重新生成长期 PRD；版本交付物最后冻结到 `project/delivery/v1.x/`。长期 PRD 和版本快照都不是反向修改 Design 的事实源。
 
 ## 目录
 
