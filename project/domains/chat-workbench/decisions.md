@@ -3,6 +3,23 @@
 > 本领域的决策/迭代历史(倒序,新在上)。从 `overview.md` 迭代日志与 `design.md` 的「D1 决策记录」抽出,按需读取。
 > `design.md` 只保留**当前**稳定设计;此处保留**为什么这样定 / 变过什么** + D1 阶段的外部依赖决定。
 
+## 2026-07-24 — 以长期 PRD 为基线反向对齐 design.md 与代码实现
+
+> 本轮**反转事实源方向**:此前 `design.md` 为事实源、`delivery/prd.md` 为投影;因 PRD 已升级为 11 章可执行业务规格,本次以 **PRD 为权威基线**,把 design.md 与 `src/` 拉齐到 PRD。仅处理经三方比对确认的漂移项,状态机 / 分组 / 隐式指派 / 违禁词气泡 / 临时草稿刷新等已对齐项不动。
+
+- **彻底移除消息 `queued`「待发送」态**:`MessageStatus` 收敛为 `sending | sent | failed`;发送前临时执行依赖不可用(云电脑 / 机器人 / RPA 积压)由 `assessOutboundDelivery` 返回新增的 `failed` disposition,直接置失败、客服手动重发;删除按 `queued` 在 opsRevision 变化时自动重排队的 `useEffect`;`proactiveStore` 持久化只认 `sent`(对齐 P-120-12)。**为什么**:PRD 6.3 明确无待发送态,排队自动重发与产品口径冲突。
+- **回捞比对失败(已送达→失败)落地**:新增 `FailureCategory: delivery_reconciliation_failed` 与 `simulateReconciliation()`;`dispatchMessages` 在乐观 `sent` 后延时回捞、小概率翻转为失败,可开失败详情、不自动重发。失败详情按 category 显示「RPA 异常 / 回捞比对失败」。
+- **移除客服端撤回入口(P-117 V1 暂缓)**:删 `MessageBubble` 悬停撤回按钮 / 确认弹窗与 `WorkbenchPage` `handleRecallFromMessage` / `canRecallMessage`;保留 `recalled → "消息已撤回"` 只读占位(后端回传驱动)。
+- **企微号运行态补「停用」**:`WechatAccountStatus` 增 `disabled`;区别于 `enabled=false`(接入配置未启用);ControlPage / OpsWechatAccountsPage / PermissionAgentsPage 状态映射同步。
+- **会话标记改个人单选**:`Conversation.tags: []` → `tag: ConversationTag | null`;下拉单选替换 + 「清除标记」;卡片第三行单图标(重要=星 / 跟进中=时钟 / 待回访=电话)。
+- **未读徽章收口**:仅 排队中 或 本人负责(会话中本人)展示;他人接待中 / 已结束不承载未读(R-105-05)。
+- **置顶 20 上限**:`handleTogglePin` 新增置顶前校验 ≥20 拒绝并提示(design 旧值 10 → 20 同步)。
+- **候选资格 在线 → 启用(active)**:`getAssignableAgents` 去掉 `agent.online` 过滤;AssignDialog 去在线过滤与在线绿点;转接弹窗顶部只读「当前负责人」;指派并发冲突提示 + 刷新候选。
+- **附件白名单**:`ATTACHMENT_WHITELIST`(图 jpg/jpeg/png/gif≤20MB;视频 mp4/mov、文档 pdf/doc/docx/xls/xlsx/ppt/pptx/txt、压缩包 zip/rar≤50MB);非白名单提交前拒绝、不进草稿区。
+- **综合搜索计数**:design 由「每段 5 条 / 固定 50-100 / 硬 100 截断」改为「首批 50 + 每批懒加载 50、不设硬上限」(对齐 R-119-04;搜索面板代码此项仅文档层对齐,UI 分页留待后续)。
+- **9.4 文案字典逐字对齐**:排队未指派 / 他人接待中 / 已结束 / 结束确认 / 账号离线-停用-封禁 / 违禁词失败(去多余前缀)/ 删好友 / 指派-转接空态 / 并发冲突 / 频率 / IP / 无权限介入 / 录屏加载 / 聚合空态 等均按字典替换。
+- **验证**:`npm run check`(ESLint + 11 契约测试 + tsc + 生产构建)全绿;真实浏览器走通排队→指派→发送(发送中 / 已送达 / 失败 / 可诊断失败开详情)、转接弹窗当前负责人头、他人接待中无未读徽章、删好友锁定文案,控制台无 error。
+
 ## 2026-07-23 — 6.3 合并失败诊断流程 + 新增「回捞比对」送达判据
 
 - **已送达采“乐观显示 + 事后回捞比对修正”，新增失败原因「回捞比对失败」**：发送经 RPA 在云桌面执行，**RPA 执行完成即先乐观标「已送达」**；系统随后从企微会话存档回捞该消息与发送内容比对，比对通过维持已送达，**只有超时窗内回捞不到 / 比对不一致才把已送达修正为失败（回捞比对失败）**、提示异常。**为什么**：RPA 只能确认“动作执行了”，是否真正进入玩家会话须以企微存档为准；但为不阻塞客服，先乐观显示成功、事后核实，异常才回退。**如何应用**：`design.md` §4 图2 先乐观已送达再回捞比对；`prd.md` 6.3(1) 状态机 `发送中 → 已送达(先乐观显示)` + 新增 `已送达 → 失败(事后回捞比对失败)`，R-115-01 改乐观显示 + 新增 R-115-06，R-116-02 失败详情原因纳入回捞比对失败。

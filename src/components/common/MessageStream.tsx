@@ -25,8 +25,6 @@ interface MessageStreamProps {
   /** 只读模式透传给 MessageBubble(player-center Drawer 用) */
   readOnly?: boolean
   onClickFailed?: (msg: Message) => void
-  onRecall?: (msg: Message) => void
-  canRecallMessage?: (msg: Message) => boolean
 }
 
 /** 「本次会话已结束」边界条 */
@@ -58,8 +56,6 @@ function MessageStream({
   highlightText,
   readOnly,
   onClickFailed,
-  onRecall,
-  canRecallMessage,
 }: MessageStreamProps) {
   const nodes: React.ReactNode[] = []
   let lastDay = ''
@@ -72,8 +68,6 @@ function MessageStream({
       highlightText={highlightText}
       readOnly={readOnly}
       onClickFailed={onClickFailed}
-      onRecall={onRecall}
-      canRecallMessage={canRecallMessage}
     />
   )
 

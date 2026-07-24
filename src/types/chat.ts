@@ -14,9 +14,12 @@ export interface Agent {
 }
 
 /**
- * 企微客户端状态。封禁同时会在 ops-admin 的风控状态中呈现，但登录状态始终以本字段为准。
+ * 企微号运行状态（PRD 6/P-103 统一口径：在线 / 离线 / 停用 / 封禁）。
+ * 由运营管理提供并实时推送，工作台只读消费。
+ * - `disabled`（停用）是运行态被运营停用，属账号级硬限制，禁止发送与重新联系；
+ *   与 `enabled=false`（ChatFlow 接入配置未启用）语义不同，后者不代表运行态停用。
  */
-export type WechatAccountStatus = 'online' | 'offline' | 'banned'
+export type WechatAccountStatus = 'online' | 'offline' | 'disabled' | 'banned'
 
 /** 企微号 */
 export interface WechatAccount {
@@ -54,7 +57,7 @@ export interface Player {
 /** 会话状态机:三态 */
 export type ConversationStatus = 'queueing' | 'active' | 'ended'
 
-/** 会话标记(V1 内置三种,可多选) */
+/** 会话标记(V1 个人视角单选,固定三值:跟进中 / 重要 / 待回访) */
 export type ConversationTag = 'follow_up' | 'important' | 'callback'
 
 /** 会话(企微号 × 玩家) */
@@ -78,7 +81,8 @@ export interface Conversation {
   }>
   /** 是否置顶(客服个人视图) */
   pinned: boolean
-  tags: ConversationTag[]
+  /** 会话标记：个人视角单选三值之一，未设置为 null；仅当前负责人可改。 */
+  tag: ConversationTag | null
   /** 未读计数(玩家发出未被客服查看) */
   unreadCount: number
   /** 最近一条消息预览(20 字内) */
@@ -96,8 +100,12 @@ export interface Conversation {
 /** 消息发送方向。system 用于跨轮次会话的系统分割消息(结束 / 重新发起 / 主动发起) */
 export type MessageDirection = 'incoming' | 'outgoing' | 'system'
 
-/** 消息状态 */
-export type MessageStatus = 'queued' | 'sending' | 'sent' | 'failed'
+/**
+ * 消息结果状态（PRD 6.3(1)）：发送中 / 已送达 / 失败。
+ * 无「待发送」——发送前临时执行依赖不可用等价于「没发出去」，直接置 failed 由客服手动重发。
+ * 「历史已撤回」不是独立 status，由 `Message.recalled` 承载只读展示。
+ */
+export type MessageStatus = 'sending' | 'sent' | 'failed'
 
 /** 消息内容类型。mixed 仅用于兼容历史图文合并存档，新发送按单条内容拆分。 */
 export type MessageContentType = 'text' | 'image' | 'video' | 'file' | 'link' | 'emoji' | 'system' | 'mixed' | 'unsupported'
@@ -115,6 +123,7 @@ export interface MessageAttachment {
 /** 失败原因分类(决定 UI 展示行为) */
 export type FailureCategory =
   | 'rpa_exception' // RPA 异常 / 企微卡顿(打开失败抽屉)
+  | 'delivery_reconciliation_failed' // 回捞比对失败:已乐观显示已送达,存档回捞不到/比对不一致(打开失败抽屉,不自动重发)
   | 'player_deleted_friendship' // 玩家删好友(会话顶部横幅)
   | 'forbidden_word_backend' // 后端兜底违禁词(只 hover)
   | 'rate_limit_exceeded' // 速率上限(只 hover)

@@ -67,10 +67,9 @@ interface Props {
   onTransferClick: () => void
   onTogglePin: (id: string) => void
   onEnd: (id: string) => void
-  onToggleTag: (id: string, tag: ConversationTag) => void
+  /** 设置标记(单选三值);传 null 清除标记 */
+  onSetTag: (id: string, tag: ConversationTag | null) => void
   onClickFailed: (msg: Message) => void
-  onRecall: (msg: Message) => void
-  canRecallMessage: (msg: Message) => boolean
   canAssignOthers: boolean
 }
 
@@ -81,6 +80,23 @@ const tagOptions: Array<{ key: ConversationTag; label: string }> = [
 ]
 
 const emojiList = ['😀', '😅', '😂', '🤣', '😊', '😍', '🤔', '😎', '😭', '😡', '👍', '👏', '🎉', '🙏', '❤️', '💪']
+
+// 附件白名单(PRD P-114 R-114-09):非白名单格式提交前拒绝,不进入草稿区。
+const ATTACHMENT_WHITELIST: Record<'image' | 'video' | 'file', { exts: string[]; maxMB: number }> = {
+  image: { exts: ['jpg', 'jpeg', 'png', 'gif'], maxMB: 20 },
+  video: { exts: ['mp4', 'mov'], maxMB: 50 },
+  file: { exts: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip', 'rar'], maxMB: 50 },
+}
+const ATTACHMENT_SUPPORT_HINT =
+  '仅支持 图片(jpg/jpeg/png/gif)、视频(mp4/mov)、文档(pdf/doc/docx/xls/xlsx/ppt/pptx/txt)、压缩包(zip/rar)'
+
+function classifyAttachment(fileName: string): 'image' | 'video' | 'file' | null {
+  const ext = fileName.slice(fileName.lastIndexOf('.') + 1).toLowerCase()
+  if (!ext || !fileName.includes('.')) return null
+  return (Object.keys(ATTACHMENT_WHITELIST) as Array<'image' | 'video' | 'file'>).find((type) =>
+    ATTACHMENT_WHITELIST[type].exts.includes(ext),
+  ) ?? null
+}
 
 function ConversationView({
   conversation,
@@ -95,10 +111,8 @@ function ConversationView({
   onTransferClick,
   onTogglePin,
   onEnd,
-  onToggleTag,
+  onSetTag,
   onClickFailed,
-  onRecall,
-  canRecallMessage,
   canAssignOthers,
 }: Props) {
   const { message, modal } = AntdApp.useApp()
@@ -282,15 +296,20 @@ function ConversationView({
   const isEnded = conversation.status === 'ended'
   const deliveryAssessment = account ? assessOutboundDelivery(account.id) : null
   const accountHardBlocked = !account?.enabled || deliveryAssessment?.disposition === 'blocked'
+  // 账号级硬限制文案统一走 PRD 9.4 字典。
   const accountBlocker = !account?.enabled
     ? '该企微号接入已禁用，历史会话仅可查看'
     : account?.status === 'banned'
-    ? '该企微号已封禁,所有消息无法发送'
-    : deliveryAssessment?.disposition === 'blocked'
-      ? `发送已被风控阻断：${deliveryAssessment.message}`
-      : null
-  const queueNotice = deliveryAssessment?.disposition === 'queued' ? deliveryAssessment.message : null
-  // 已结束 + 重新联系态 → 硬风控和好友关系正常时解锁；暂时不可用会进入待发队列。
+      ? '企微号已被封禁，暂时无法发送消息'
+      : account?.status === 'disabled'
+        ? '企微号已停用，暂时无法发送消息'
+        : account?.status === 'offline'
+          ? '企微号已离线，暂时无法发送消息'
+          : deliveryAssessment?.disposition === 'blocked'
+            ? deliveryAssessment.message
+            : null
+  // 已结束「重新联系」入口:账号级 / 全局硬限制或好友关系异常时禁用(PRD 9.2.1)。
+  const reactivateBlocker = account?.status === 'offline' ? '企微号已离线，暂时无法重新联系' : accountBlocker
   const canReactivate = isEnded && !accountHardBlocked && conversation.relationStatus === 'normal'
   const canEditWhileEnded = isEnded && isReactivating && canReactivate
   // 排队中(未指派):V1 取消隐式指派,必须先指派给自己才能回复,输入区不渲染
@@ -325,9 +344,10 @@ function ConversationView({
     }
   }
 
+  // 粘贴图片(剪贴板位图,MIME 恒为 image/*):直接按图片草稿处理。
   const addImageDraft = (file: File) => {
-    if (file.size > 20 * 1024 * 1024) {
-      modal.warning({ title: '图片过大', content: '单图限制 20MB' })
+    if (file.size > ATTACHMENT_WHITELIST.image.maxMB * 1024 * 1024) {
+      modal.warning({ title: '图片过大', content: `单图限制 ${ATTACHMENT_WHITELIST.image.maxMB}MB` })
       return
     }
     setAttachments((prev) => [
@@ -342,17 +362,23 @@ function ConversationView({
     ])
   }
 
-  const addMediaDraft = (file: File) => {
-    if (file.size > 50 * 1024 * 1024) {
-      modal.warning({ title: '文件过大', content: '单文件限制 50MB' })
+  // 文件选择:按扩展名走白名单;非白名单格式或超限,提交前拒绝、不进入草稿区。
+  const addFileDraft = (file: File) => {
+    const type = classifyAttachment(file.name)
+    if (!type) {
+      modal.warning({ title: '不支持的附件格式', content: ATTACHMENT_SUPPORT_HINT })
       return
     }
-    const isVideo = file.type.startsWith('video/')
+    const { maxMB } = ATTACHMENT_WHITELIST[type]
+    if (file.size > maxMB * 1024 * 1024) {
+      modal.warning({ title: '附件过大', content: `${type === 'image' ? '单图' : '单文件'}限制 ${maxMB}MB` })
+      return
+    }
     setAttachments((prev) => [
       ...prev,
       {
         id: `att_${Date.now()}_${prev.length}`,
-        type: isVideo ? 'video' : 'file',
+        type,
         url: URL.createObjectURL(file),
         name: file.name,
         sizeBytes: file.size,
@@ -368,13 +394,10 @@ function ConversationView({
     })
   }
 
-  // 统一附件入口:按 MIME 分流(图片走 20MB 限制,其余走 50MB)
+  // 统一附件入口:按扩展名走白名单校验(图片 / 视频 / 文档 / 压缩包)。
   const handlePickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      if (file.type.startsWith('image/')) addImageDraft(file)
-      else addMediaDraft(file)
-    }
+    if (file) addFileDraft(file)
     e.target.value = ''
   }
 
@@ -440,9 +463,9 @@ function ConversationView({
               <Tooltip
                 title={
                   accountHardBlocked
-                    ? accountBlocker ?? '该企微号当前不可用'
+                    ? reactivateBlocker ?? '该企微号当前不可用'
                     : conversation.relationStatus !== 'normal'
-                      ? '好友关系已断开，重新添加后才能主动发起'
+                      ? '玩家已删除该企微号，请重新添加好友后再联系'
                       : '解锁输入区,主动给玩家发起会话;发送成功后会话进入会话中'
                 }
               >
@@ -470,16 +493,26 @@ function ConversationView({
           <Dropdown
             disabled={!isMyAssignment || actionsDisabled}
             menu={{
-              items: tagOptions.map((t) => ({
-                key: t.key,
-                label: (
-                  <span>
-                    {conversation.tags.includes(t.key) ? '✓ ' : '  '}
-                    {t.label}
-                  </span>
-                ),
-                onClick: () => onToggleTag(conversation.id, t.key),
-              })),
+              items: [
+                ...tagOptions.map((t) => ({
+                  key: t.key,
+                  label: (
+                    <span>
+                      {conversation.tag === t.key ? '✓ ' : '　'}
+                      {t.label}
+                    </span>
+                  ),
+                  // 单选:点已选值取消,点新值替换旧值
+                  onClick: () => onSetTag(conversation.id, conversation.tag === t.key ? null : t.key),
+                })),
+                { type: 'divider' as const },
+                {
+                  key: '__clear',
+                  label: '清除标记',
+                  disabled: !conversation.tag,
+                  onClick: () => onSetTag(conversation.id, null),
+                },
+              ],
             }}
           >
             <Button size="small">标记</Button>
@@ -498,7 +531,7 @@ function ConversationView({
             onClick={() => {
               modal.confirm({
                 title: '结束会话',
-                content: '确认后本次会话标记为结束,可被玩家重新激活。',
+                content: '确认结束该会话？结束后可通过"重新联系"继续',
                 okText: '确认结束',
                 cancelText: '取消',
                 onOk: () => onEnd(conversation.id),
@@ -513,15 +546,12 @@ function ConversationView({
       {accountBlocker && (
         <Alert type="error" showIcon banner message={accountBlocker} />
       )}
-      {!accountBlocker && queueNotice && (
-        <Alert type="warning" showIcon banner message={`${queueNotice}；发送后会明确显示“待发送”状态。`} />
-      )}
       {isEnded && isReactivating && !accountBlocker && (
         <Alert
           type="info"
           showIcon
           banner
-          message="重新联系中：首条消息成功后会话才会进入会话中并指派给你；待发或失败时仍保持已结束，可继续重试"
+          message="重新联系中：首条消息成功后会话才会进入会话中并指派给你；失败时仍保持已结束，可继续重试"
         />
       )}
       {conversation.relationStatus !== 'normal' && !accountBlocker && (
@@ -529,9 +559,7 @@ function ConversationView({
           type="warning"
           showIcon
           banner
-          message={conversation.relationStatus === 'removed_by_agent'
-            ? '该好友已被管家删除，重新添加前禁止继续发送'
-            : '玩家已删除好友，重新添加前禁止继续发送'}
+          message="玩家已删除该企微号，请重新添加好友后再联系"
         />
       )}
 
@@ -572,8 +600,6 @@ function ConversationView({
           messages={visibleStreamMessages}
           highlightMessageId={highlightMessageId}
           onClickFailed={onClickFailed}
-          onRecall={onRecall}
-          canRecallMessage={canRecallMessage}
         />
       </div>
 
@@ -581,16 +607,14 @@ function ConversationView({
         {isReadOnly ? (
           <div className="cf-conv-view__readonly">
             {conversation.relationStatus !== 'normal'
-              ? '好友关系已断开，重新添加后才能继续发送消息'
-              : isEnded
-                ? '会话已结束，如需继续沟通请点击右上角「重新联系」'
-                : accountHardBlocked
-                  ? `企微号 ${account?.shortName ?? ''} 当前不可用,无法发送消息`
+              ? '玩家已删除该企微号，请重新添加好友后再联系'
+              : accountHardBlocked
+                ? accountBlocker ?? '企微号当前不可用，暂时无法发送消息'
+                : isEnded
+                  ? '会话已结束，如需继续沟通请点击"重新联系"'
                   : isQueueing
-                    ? '此会话在排队中,点击右上角「指派」接入(可指派给自己)后即可回复'
-                    : canAssignOthers
-                      ? `此会话已指派给 ${assignee?.name ?? '其他客服'}，消息只读；如需调整负责人可点击右上角「转接」`
-                      : `此会话已指派给 ${assignee?.name ?? '其他客服'},你只能查看`}
+                    ? '此会话尚未指派，请先指派后回复'
+                    : `此会话已由${assignee?.name ?? '其他客服'}接待，你只能查看`}
           </div>
         ) : (
           <>
@@ -598,6 +622,7 @@ function ConversationView({
               ref={fileInputRef}
               type="file"
               hidden
+              accept=".jpg,.jpeg,.png,.gif,.mp4,.mov,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
               onChange={handlePickFile}
             />
 

@@ -15,6 +15,7 @@ interface Props {
 
 function FailureDrawer({ message, conversation, onClose, onIntervene, canIntervene, canRetry, onRetry }: Props) {
   const failure = message?.failure
+  const failureLabel = failure?.category === 'delivery_reconciliation_failed' ? '回捞比对失败' : 'RPA 异常'
   const account = conversation ? findAccount(conversation.accountId) : null
   const [videoFailed, setVideoFailed] = useState(false)
   useEffect(() => setVideoFailed(false), [message?.id])
@@ -40,7 +41,7 @@ function FailureDrawer({ message, conversation, onClose, onIntervene, canInterve
         <div className="cf-failure">
           <section className="cf-failure__summary">
             <Space size={12} wrap>
-              <Tag color="red">RPA 异常</Tag>
+              <Tag color="red">{failureLabel}</Tag>
               <span className="cf-mono">{failure.code}</span>
             </Space>
             <p className="cf-failure__meta">
@@ -60,7 +61,7 @@ function FailureDrawer({ message, conversation, onClose, onIntervene, canInterve
             <pre className="cf-failure__raw">{failure.message}</pre>
           </section>
           {!canIntervene && (
-            <div className="cf-failure__notice">需要人工介入时,请联系运营主管或系统管理员。</div>
+            <div className="cf-failure__notice">请联系运营主管或系统管理员协助处理</div>
           )}
 
           <section>
@@ -74,7 +75,7 @@ function FailureDrawer({ message, conversation, onClose, onIntervene, canInterve
                 </p>
               </div>
             ) : (
-              <Alert type="info" showIcon message={recordingExpired ? '录屏已过期' : '录屏不可用'} description="可重试当前消息；仍失败时由主管或管理员进入控制台人工处理。" />
+              <Alert type="info" showIcon message={recordingExpired ? '录屏已过期' : '录屏加载失败'} description="可重试当前消息；仍失败时由主管或管理员进入控制台人工处理。" />
             )}
           </section>
         </div>

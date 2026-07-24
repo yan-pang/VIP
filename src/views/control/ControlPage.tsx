@@ -31,12 +31,14 @@ type ScanIntent = { accountId: string } | null
 const statusLabel: Record<WechatAccountStatus, string> = {
   online: '在线',
   offline: '离线',
+  disabled: '停用',
   banned: '封禁中',
 }
 
 const statusColor: Record<WechatAccountStatus, string> = {
   online: '#52C41A',
   offline: '#8C8C8C',
+  disabled: '#8C8C8C',
   banned: '#FF4D4F',
 }
 

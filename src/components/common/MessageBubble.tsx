@@ -3,20 +3,20 @@
  * 视觉延续 chat-workbench 设计例外:气泡 8px 圆角 / 行高 1.55 / 状态图标。
  *
  * 通过 `readOnly` 切换交互:
- *   - readOnly=false(默认 / chat-workbench):支持失败 Tooltip+ rpa_exception 类失败可点击 / 悬停出「撤回」按钮
- *   - readOnly=true (player-center 会话只读 Drawer):仅 Tooltip,失败不可点击,无撤回入口
+ *   - readOnly=false(默认 / chat-workbench):支持失败 Tooltip + 可诊断类失败(RPA 异常 / 回捞比对失败)可点击打开失败详情
+ *   - readOnly=true (player-center 会话只读 Drawer):仅 Tooltip,失败不可点击
+ *
+ * V1 不提供撤回入口(P-117 暂缓);`message.recalled` 由后端会话存档回查后回传,前端只读展示占位。
  *
  * 样式 class(`cf-msg__*`)在 src/styles/Workbench.scss 中定义,全局生效。
  */
 import {
   CheckOutlined,
-  ClockCircleOutlined,
   ExclamationCircleFilled,
   FileOutlined,
   LoadingOutlined,
-  RollbackOutlined,
 } from '@ant-design/icons'
-import { App as AntdApp, Image, Tooltip } from 'antd'
+import { Image, Tooltip } from 'antd'
 import type { ReactNode } from 'react'
 import type { Message, MessageAttachment } from '../../types/chat'
 import { findAgent, findPlayer } from '../../services/chatflowMock'
@@ -28,12 +28,9 @@ interface MessageBubbleProps {
   highlighted?: boolean
   /** 只读消息筛选时需要高亮的正文关键词 */
   highlightText?: string
-  /** 失败气泡(rpa_exception)点击 → 打开失败详情抽屉(仅 chat-workbench 用) */
+  /** 可诊断失败(rpa_exception / delivery_reconciliation_failed)点击 → 打开失败详情抽屉(仅 chat-workbench 用) */
   onClickFailed?: (msg: Message) => void
-  /** 悬停出「撤回」按钮 → 撤回(仅 chat-workbench 用,readOnly 时禁用) */
-  onRecall?: (msg: Message) => void
-  canRecallMessage?: (msg: Message) => boolean
-  /** 只读模式:无右键菜单、失败气泡不可点 */
+  /** 只读模式:失败气泡不可点 */
   readOnly?: boolean
 }
 
@@ -42,11 +39,8 @@ function MessageBubble({
   highlighted = false,
   highlightText,
   onClickFailed,
-  onRecall,
-  canRecallMessage,
   readOnly = false,
 }: MessageBubbleProps) {
-  const { modal } = AntdApp.useApp()
   const renderHighlightedText = (text: string): ReactNode => {
     const query = highlightText?.trim().toLocaleLowerCase()
     if (!query) return text
@@ -83,26 +77,8 @@ function MessageBubble({
       ? findPlayer(message.senderId)?.nickname ?? '玩家'
       : findAgent(message.senderId)?.name ?? '客服'
   const failureCat = message.failure?.category
-  const isClickableFailed = !readOnly && failureCat === 'rpa_exception'
-  // 悬停出「撤回」按钮:仅自己发出、已送达、未撤回的消息
-  const canRecall =
-    !readOnly &&
-    message.direction === 'outgoing' &&
-    message.status === 'sent' &&
-    !message.recalled &&
-    (canRecallMessage?.(message) ?? true) &&
-    !!onRecall
-
-  const handleRecall = () => {
-    if (!canRecall || !onRecall) return
-    modal.confirm({
-      title: '撤回消息',
-      content: '确认后将提交撤回请求。普通客服只能撤回自己发送的消息，主管可按权限处理团队消息。',
-      okText: '确认撤回',
-      cancelText: '取消',
-      onOk: () => onRecall(message),
-    })
-  }
+  const isClickableFailed =
+    !readOnly && (failureCat === 'rpa_exception' || failureCat === 'delivery_reconciliation_failed')
 
   const renderNonImageAttachment = (a: MessageAttachment, i: number) => {
     if (a.type === 'video') {
@@ -213,31 +189,11 @@ function MessageBubble({
         </span>
       </div>
       <div className="cf-msg__bubble-wrap">
-        {/* 悬停操作条:目前仅「撤回」,后续可在此追加更多消息级图标交互 */}
-        {canRecall && (
-          <div className="cf-msg__actions">
-            <Tooltip title="撤回">
-              <button
-                type="button"
-                className="cf-msg__action"
-                onClick={handleRecall}
-                aria-label="撤回"
-              >
-                <RollbackOutlined />
-              </button>
-            </Tooltip>
-          </div>
-        )}
         <div className="cf-msg__bubble">
           {renderContent()}
         </div>
         <div className="cf-msg__status">
           {message.direction === 'outgoing' && message.status === 'sending' && <LoadingOutlined />}
-          {message.direction === 'outgoing' && message.status === 'queued' && (
-            <Tooltip title="待发送：RPA 或企微恢复后自动重试">
-              <ClockCircleOutlined style={{ color: '#d48806' }} />
-            </Tooltip>
-          )}
           {message.direction === 'outgoing' && message.status === 'sent' && (
             <CheckOutlined style={{ color: '#8C8C8C' }} />
           )}

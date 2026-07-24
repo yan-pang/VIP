@@ -1,4 +1,4 @@
-import { Avatar, Badge, Empty, Input, Modal, Space, Tag } from 'antd'
+import { Avatar, Empty, Input, Modal, Space, Tag } from 'antd'
 import { useMemo, useState } from 'react'
 import type { Agent } from '../../../types/chat'
 
@@ -6,18 +6,21 @@ interface Props {
   state: { conversationId: string; mode: 'assign' | 'transfer' } | null
   agents: Agent[]
   currentAgentId: string
+  /** 转接模式:会话当前负责人姓名,只读展示作上下文(不作候选) */
+  currentAssigneeName?: string
   onClose: () => void
   onSubmit: (conversationId: string, agentId: string) => void
 }
 
-function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Props) {
+function AssignDialog({ state, agents, currentAgentId, currentAssigneeName, onClose, onSubmit }: Props) {
   const [keyword, setKeyword] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const candidates = useMemo(() => {
     if (!state) return []
-    // 离线客服不支持转接/指派；转接时的原指派人已由调用方剔除。
-    let list = agents.filter((a) => a.online)
+    // 候选资格 = 启用(active) + 同游戏 + 同号授权(由调用方过滤);不看登录在线态。
+    // 转接时的原负责人已由调用方剔除。
+    let list = agents
     if (keyword) {
       list = list.filter((a) => a.name.includes(keyword))
     }
@@ -55,6 +58,12 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
       destroyOnHidden
     >
       <div className="cf-assign">
+        {state?.mode === 'transfer' && (
+          <div className="cf-assign__current" style={{ marginBottom: 12 }}>
+            <span className="cf-text-tertiary">当前负责人：</span>
+            <span>{currentAssigneeName ?? '—'}</span>
+          </div>
+        )}
         <div className="cf-assign__field">
           <label>目标客服 *</label>
           <Input
@@ -66,7 +75,7 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
         </div>
         <div className="cf-assign__list">
           {candidates.length === 0 ? (
-            <Empty description="无可选客服" />
+            <Empty description={state?.mode === 'transfer' ? '暂无其他可转接的客服' : '暂无可指派的客服'} />
           ) : (
             candidates.map((a) => (
               <button
@@ -81,11 +90,9 @@ function AssignDialog({ state, agents, currentAgentId, onClose, onSubmit }: Prop
                     checked={selectedId === a.id}
                     readOnly
                   />
-                  <Badge dot color="#52C41A" offset={[-3, 30]}>
-                    <Avatar size={28} style={{ background: '#95E1B5' }}>
-                      {a.name.slice(0, 1)}
-                    </Avatar>
-                  </Badge>
+                  <Avatar size={28} style={{ background: '#95E1B5' }}>
+                    {a.name.slice(0, 1)}
+                  </Avatar>
                   <span>{a.name}</span>
                   {state?.mode === 'assign' && a.id === currentAgentId && (
                     <Tag color="green">推荐</Tag>

@@ -8,6 +8,8 @@ import ConversationView from './components/ConversationView'
 import FailureDrawer from './components/FailureDrawer'
 import PlayerAside from './components/PlayerAside'
 import {
+  findAgent,
+  simulateReconciliation,
   simulateSendOutcome,
   wechatAccounts,
 } from '../../services/chatflowMock'
@@ -263,9 +265,9 @@ function WorkbenchPage() {
               { agentId: currentAgentId, changedAt: now, reason: 'explicit', note: '客服主动发起' },
             ],
             pinned: false,
-            tags: [],
+            tag: null,
             unreadCount: 0,
-            lastMessagePreview: '(主动发起会话,待发送首条消息)',
+            lastMessagePreview: '(主动发起会话,待首条消息送达)',
             lastMessageAt: now,
             createdAt: now,
             relationStatus: getRelation(pid, acc)?.relationStatus ?? 'normal',
@@ -445,9 +447,14 @@ function WorkbenchPage() {
     (id: string) => {
       const c = conversations.find((x) => x.id === id)
       if (!c) return
+      // 置顶上限 20(PRD R-111-03):新增置顶前校验,取消置顶不受限。
+      if (!c.pinned && conversations.filter((x) => x.pinned).length >= 20) {
+        message.warning('最多置顶 20 个会话，请先取消其他置顶')
+        return
+      }
       updateConv(id, { pinned: !c.pinned })
     },
-    [conversations, updateConv],
+    [conversations, message, updateConv],
   )
 
   const handleEndConv = useCallback(
@@ -496,16 +503,12 @@ function WorkbenchPage() {
     })
   }, [])
 
-  const handleToggleTag = useCallback(
-    (id: string, tag: ConversationTag) => {
-      const c = conversations.find((x) => x.id === id)
-      if (!c) return
-      const exists = c.tags.includes(tag)
-      updateConv(id, {
-        tags: exists ? c.tags.filter((t) => t !== tag) : [...c.tags, tag],
-      })
+  // 会话标记:个人视角单选三值,选新值替换旧值,传 null 清除(PRD R-110-03)。
+  const handleSetTag = useCallback(
+    (id: string, tag: ConversationTag | null) => {
+      updateConv(id, { tag })
     },
-    [conversations, updateConv],
+    [updateConv],
   )
 
   const handleAssign = useCallback(
@@ -513,6 +516,12 @@ function WorkbenchPage() {
       const now = new Date().toISOString()
       const conv = conversations.find((c) => c.id === conversationId)
       if (!conv) return
+      // 并发冲突:以指派模式打开,但提交前会话已被他人接入(assigneeId 已落位)。
+      if (assignFor?.mode === 'assign' && conv.assigneeId !== null) {
+        message.warning(`会话已由${findAgent(conv.assigneeId)?.name ?? '其他人'}处理，请刷新后重试`)
+        setAssignFor(null)
+        return
+      }
       const isTransfer = !!conv.assigneeId
       if (isTransfer) {
         if (conv.assigneeId === agentId) return
@@ -534,7 +543,7 @@ function WorkbenchPage() {
       })
       setAssignFor(null)
     },
-    [conversations, currentAgentId, session.canAssignOthers, updateConv],
+    [assignFor?.mode, conversations, currentAgentId, message, session.canAssignOthers, updateConv],
   )
 
   const deliveriesInFlightRef = useRef(new Set<string>())
@@ -624,41 +633,29 @@ function WorkbenchPage() {
       )) {
         setRelationStatusFromWechat(conversation.playerId, conversation.accountId, 'removed_by_player')
       }
+
+      // 回捞比对核实(PRD 6.3):对刚乐观标「已送达」的消息,延时从企微存档回捞比对,
+      // 小概率比对失败 → 把「已送达」修正为失败「回捞比对失败」,不自动重发。
+      const sentIds = deliverable
+        .filter((message) => outcomes.get(message.id)?.status === 'sent')
+        .map((message) => message.id)
+      if (sentIds.length) {
+        window.setTimeout(() => {
+          const reconciliations = new Map(sentIds.map((id) => [id, simulateReconciliation()]))
+          setMessages((prev) => prev.map((message) => {
+            const reconciliation = reconciliations.get(message.id)
+            // 仅当消息仍停留在「已送达」时才修正,避免覆盖后续状态变化。
+            if (!reconciliation?.failed || message.status !== 'sent') return message
+            return { ...message, status: 'failed', failure: reconciliation.failure }
+          }))
+        }, 2_500 + Math.random() * 1_500)
+      }
     }, 1_000 + Math.random() * 500)
   }, [activateConversationAfterFirstSuccess])
 
-  // RPA / 企微暂不可用时保留幂等键并排队；运行态变化后只重试仍处于 queued 的消息。
-  useEffect(() => {
-    void opsRevision
-    const groups = new Map<string, Message[]>()
-    messages.filter((message) => message.status === 'queued').forEach((message) => {
-      const key = message.sendBatchId ?? message.id
-      groups.set(key, [...(groups.get(key) ?? []), message])
-    })
-    groups.forEach((queuedMessages) => {
-      const conversation = conversations.find((item) => item.id === queuedMessages[0].conversationId)
-      if (!conversation) return
-      const assessment = assessOutboundDelivery(conversation.accountId)
-      if (assessment.disposition === 'ready') {
-        dispatchMessages(conversation, queuedMessages)
-        return
-      }
-      if (assessment.disposition === 'blocked') {
-        setMessages((prev) => prev.map((message) => queuedMessages.some((queued) => queued.id === message.id)
-          ? {
-              ...message,
-              status: 'failed',
-              failure: {
-                category: 'risk_blocked',
-                code: assessment.code,
-                message: assessment.message,
-                executedAt: new Date().toISOString(),
-              },
-            }
-          : message))
-      }
-    })
-  }, [conversations, dispatchMessages, messages, opsRevision])
+  // PRD 无「待发送」自动重排队:发送前依赖不可用一律直接失败,由客服手动重发。
+  // 保留对 opsRevision 的订阅(企微号状态实时刷新可用性),但不再驱动排队重发。
+  void opsRevision
 
   const handleSendMessage = useCallback(
     (
@@ -671,13 +668,13 @@ function WorkbenchPage() {
       const attachments = payload.attachments?.length ? payload.attachments : undefined
       if (!text && !attachments) return false
       if (conv.relationStatus !== 'normal') {
-        message.error(conv.relationStatus === 'removed_by_agent' ? '该好友已被管家删除，重新添加后才能发送' : '玩家已删除好友，重新添加后才能发送')
+        message.error('玩家已删除该企微号，请重新添加好友后再联系')
         return false
       }
 
       const delivery = assessOutboundDelivery(conv.accountId)
       if (delivery.disposition === 'blocked') {
-        message.error(`发送已阻断：${delivery.message}`)
+        message.error(delivery.message)
         return false
       }
 
@@ -699,7 +696,16 @@ function WorkbenchPage() {
         ? {
             category: 'forbidden_word_backend' as const,
             code: 'FORBIDDEN_WORD',
-            message: `发送失败：消息命中${game ? `游戏「${game.id}-${game.name}」` : '当前游戏'}的违禁词 ${matchedWords}，未发送`,
+            message: `消息命中${game ? `游戏「${game.id}-${game.name}」` : '当前游戏'}的违禁词 ${matchedWords}，未发送`,
+            executedAt: now,
+          }
+        : undefined
+      // 临时执行依赖不可用:PRD 无待发送,直接置失败,由客服手动重发。
+      const dependencyFailure = delivery.disposition === 'failed'
+        ? {
+            category: 'other' as const,
+            code: delivery.code,
+            message: delivery.message,
             executedAt: now,
           }
         : undefined
@@ -714,8 +720,8 @@ function WorkbenchPage() {
           text,
           senderId: currentAgentId,
           createdAt: new Date(baseTime).toISOString(),
-          status: forbiddenFailure ? 'failed' : delivery.disposition === 'queued' ? 'queued' : 'sending',
-          failure: forbiddenFailure,
+          status: forbiddenFailure || dependencyFailure ? 'failed' : 'sending',
+          failure: forbiddenFailure ?? dependencyFailure,
           clientRequestId: `client_${batchKey}_text`,
           sendBatchId,
           attemptCount: 0,
@@ -732,7 +738,8 @@ function WorkbenchPage() {
           mediaSizeBytes: attachment.sizeBytes,
           senderId: currentAgentId,
           createdAt: new Date(baseTime + outgoingMessages.length).toISOString(),
-          status: delivery.disposition === 'queued' ? 'queued' : 'sending',
+          status: dependencyFailure ? 'failed' : 'sending',
+          failure: dependencyFailure,
           clientRequestId: `client_${batchKey}_attachment_${index}`,
           sendBatchId,
           attemptCount: 0,
@@ -755,14 +762,15 @@ function WorkbenchPage() {
       // 一个发送批次执行混发内容，但每个子消息独立返回结果；允许出现部分失败。
       const pendingMessages = outgoingMessages.filter((message) => message.status === 'sending')
       if (pendingMessages.length > 0) dispatchMessages(conv, pendingMessages)
-      if (delivery.disposition === 'queued') message.info(delivery.message)
+      if (dependencyFailure) message.error(dependencyFailure.message)
       return true
     },
     [conversations, currentAgentId, dispatchMessages, message, updateConv],
   )
 
   const handleClickFailedMessage = useCallback((msg: Message) => {
-    if (msg.failure?.category === 'rpa_exception') {
+    // 可诊断类失败(RPA 异常 / 回捞比对失败)才打开失败详情抽屉。
+    if (msg.failure?.category === 'rpa_exception' || msg.failure?.category === 'delivery_reconciliation_failed') {
       setFailureForMessageId(msg.id)
     }
   }, [])
@@ -783,38 +791,23 @@ function WorkbenchPage() {
     }
     const assessment = assessOutboundDelivery(conversation.accountId)
     if (assessment.disposition === 'blocked') {
-      message.error(`重试已阻断：${assessment.message}`)
+      message.error(assessment.message)
       return
     }
+    // 依赖仍不可用 → 重试仍直接失败(不排队);可执行 → 重新进入发送中。
     const retryMessage: Message = {
       ...failureMessage,
-      status: assessment.disposition === 'queued' ? 'queued' : 'sending',
-      failure: undefined,
+      status: assessment.disposition === 'ready' ? 'sending' : 'failed',
+      failure: assessment.disposition === 'failed'
+        ? { category: 'other', code: assessment.code, message: assessment.message, executedAt: new Date().toISOString() }
+        : undefined,
       clientRequestId: failureMessage.clientRequestId ?? `retry_${failureMessage.id}`,
     }
     setMessages((prev) => prev.map((message) => message.id === retryMessage.id ? retryMessage : message))
     setFailureForMessageId(null)
     if (assessment.disposition === 'ready') dispatchMessages(conversation, [retryMessage])
-    else message.info(assessment.message)
+    else message.error(assessment.message)
   }, [conversations, currentAgentId, dispatchMessages, failureMessage, message])
-
-  const handleRecallFromMessage = useCallback(
-    (msg: Message) => {
-      const conv = conversations.find((c) => c.id === msg.conversationId)
-      if (!conv || !visibleAccountIds.includes(conv.accountId)) return
-      if (msg.senderId !== currentAgentId && !session.canRecallTeamMessages) return
-      setMessages((prev) => prev.map((message) => message.id === msg.id
-        ? { ...message, recalled: true }
-        : message))
-      message.success('消息已撤回')
-    },
-    [conversations, currentAgentId, message, session.canRecallTeamMessages, visibleAccountIds],
-  )
-
-  const canRecallMessage = useCallback(
-    (msg: Message) => msg.senderId === currentAgentId || session.canRecallTeamMessages,
-    [currentAgentId, session.canRecallTeamMessages],
-  )
 
   /* ============== render ============== */
 
@@ -858,10 +851,8 @@ function WorkbenchPage() {
           }
           onTogglePin={handleTogglePin}
           onEnd={handleEndConv}
-          onToggleTag={handleToggleTag}
+          onSetTag={handleSetTag}
           onClickFailed={handleClickFailedMessage}
-          onRecall={handleRecallFromMessage}
-          canRecallMessage={canRecallMessage}
           canAssignOthers={session.canAssignOthers}
         />
       </section>
@@ -894,6 +885,11 @@ function WorkbenchPage() {
         state={assignFor}
         agents={assignableAgents}
         currentAgentId={currentAgentId}
+        currentAssigneeName={
+          assignFor?.mode === 'transfer' && selected?.assigneeId
+            ? findAgent(selected.assigneeId)?.name
+            : undefined
+        }
         onClose={() => setAssignFor(null)}
         onSubmit={handleAssign}
       />

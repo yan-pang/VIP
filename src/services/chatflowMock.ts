@@ -123,7 +123,7 @@ export const conversations: Conversation[] = [
       { agentId: 'agent_self', changedAt: '2026-05-18T14:30:00+08:00', reason: 'explicit' },
     ],
     pinned: true,
-    tags: ['important', 'follow_up'],
+    tag: 'important',
     unreadCount: 2,
     lastMessagePreview: '这个优惠券怎么用?',
     lastMessageAt: '2026-05-18T15:40:00+08:00',
@@ -142,7 +142,7 @@ export const conversations: Conversation[] = [
       { agentId: null, changedAt: '2026-05-14T18:00:00+08:00', reason: 'reactivate' },
     ],
     pinned: false,
-    tags: [],
+    tag: null,
     unreadCount: 1,
     lastMessagePreview: '在吗 我充值后没到账',
     lastMessageAt: '2026-05-18T15:38:00+08:00',
@@ -159,7 +159,7 @@ export const conversations: Conversation[] = [
       { agentId: 'agent_self', changedAt: '2026-05-18T11:20:00+08:00', reason: 'explicit' },
     ],
     pinned: false,
-    tags: [],
+    tag: null,
     unreadCount: 0,
     lastMessagePreview: '好的谢谢',
     lastMessageAt: '2026-05-18T11:55:00+08:00',
@@ -176,7 +176,7 @@ export const conversations: Conversation[] = [
       { agentId: 'agent_zhang', changedAt: '2026-05-18T10:00:00+08:00', reason: 'explicit' },
     ],
     pinned: false,
-    tags: ['callback'],
+    tag: 'callback',
     unreadCount: 0,
     lastMessagePreview: '明天再联系你',
     lastMessageAt: '2026-05-18T13:00:00+08:00',
@@ -193,7 +193,7 @@ export const conversations: Conversation[] = [
       { agentId: 'agent_self', changedAt: '2026-05-17T16:00:00+08:00', reason: 'explicit' },
     ],
     pinned: false,
-    tags: [],
+    tag: null,
     unreadCount: 0,
     lastMessagePreview: '上次问题处理好了吗?',
     lastMessageAt: '2026-05-17T16:30:00+08:00',
@@ -210,7 +210,7 @@ export const conversations: Conversation[] = [
       { agentId: 'agent_self', changedAt: '2026-05-16T10:00:00+08:00', reason: 'explicit' },
     ],
     pinned: false,
-    tags: [],
+    tag: null,
     unreadCount: 0,
     lastMessagePreview: '感谢咨询,有需要随时找我',
     lastMessageAt: '2026-05-16T11:20:00+08:00',
@@ -607,7 +607,7 @@ export function simulateSendOutcome(contentType: MessageContentType = 'text'): {
       failure: {
         category: 'rate_limit_exceeded',
         code: 'RATE_LIMIT',
-        message: '该企微号已达发送上限,请稍后再试',
+        message: '当前企微号发送已达上限，请稍后再试',
         executedAt: new Date().toISOString(),
       },
     }
@@ -640,6 +640,31 @@ export function simulateSendOutcome(contentType: MessageContentType = 'text'): {
       category: 'other',
       code: 'UNKNOWN',
       message: '未知错误,请联系管理员',
+      executedAt: new Date().toISOString(),
+    },
+  }
+}
+
+/**
+ * Mock「回捞比对」核实(PRD 6.3):消息经 RPA 执行完先乐观标「已送达」,
+ * 系统随后从企微会话存档回捞比对。绝大多数比对通过(维持已送达);
+ * 小概率(~8%)回捞不到 / 比对不一致 → 把「已送达」修正为失败「回捞比对失败」,
+ * 打开失败详情核对,**不自动重发**(RPA 已执行,重发有重复送达风险)。
+ */
+export function simulateReconciliation(): { failed: false } | {
+  failed: true
+  failure: import('../types/chat').FailureDetail
+} {
+  if (Math.random() >= 0.08) return { failed: false }
+  return {
+    failed: true,
+    failure: {
+      category: 'delivery_reconciliation_failed',
+      code: 'RECONCILIATION_MISMATCH',
+      message: '已乐观显示已送达,但企微会话存档在超时窗内回捞不到该消息 / 内容比对不一致,已修正为发送异常',
+      recordingUrl: '/mock/recording-rpa-timeout.mp4',
+      recordingSizeBytes: 4_408_172,
+      recordingExpireAt: new Date(Date.now() + 30 * 86400_000).toISOString(),
       executedAt: new Date().toISOString(),
     },
   }

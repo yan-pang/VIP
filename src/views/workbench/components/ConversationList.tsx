@@ -1,7 +1,7 @@
-import { CaretDownOutlined, CaretRightOutlined, FilterOutlined, PushpinFilled, SearchOutlined, StarFilled } from '@ant-design/icons'
+import { CaretDownOutlined, CaretRightOutlined, ClockCircleFilled, FilterOutlined, PhoneFilled, PushpinFilled, SearchOutlined, StarFilled } from '@ant-design/icons'
 import { Avatar, Badge, Checkbox, Divider, Empty, Popover, Tooltip } from 'antd'
 import { useEffect, useState } from 'react'
-import type { Conversation, ConversationGroupKey } from '../../../types/chat'
+import type { Conversation, ConversationGroupKey, ConversationTag } from '../../../types/chat'
 import { findPlayer, wechatAccounts } from '../../../services/chatflowMock'
 import { getRelation, subscribePlayerCenter } from '../../../services/playerCenterMock'
 
@@ -22,6 +22,13 @@ const groupLabel: Record<ConversationGroupKey, string> = {
   active: '会话中',
   assigned_other: '他人接待中',
   ended: '已结束',
+}
+
+// 会话标记(单选三值)对应的卡片图标(PRD 9.2.5:单个图标)。
+const tagMeta: Record<ConversationTag, { label: string; icon: React.ReactNode }> = {
+  important: { label: '重要', icon: <StarFilled style={{ color: '#FF4D4F', fontSize: 12 }} /> },
+  follow_up: { label: '跟进中', icon: <ClockCircleFilled style={{ color: '#FAAD14', fontSize: 12 }} /> },
+  callback: { label: '待回访', icon: <PhoneFilled style={{ color: '#1677FF', fontSize: 12 }} /> },
 }
 
 /**
@@ -116,7 +123,7 @@ function ConversationList({
               <span>{a.shortName}</span>
               {a.status !== 'online' && (
                 <span className="cf-text-tertiary">
-                  {a.status === 'offline' ? '离线' : '封禁'}
+                  {a.status === 'offline' ? '离线' : a.status === 'disabled' ? '停用' : '封禁'}
                 </span>
               )}
             </span>
@@ -129,7 +136,14 @@ function ConversationList({
   return (
     <div className="cf-conv-list">
       <div className="cf-conv-list__groups">
-        {groupOrder.map((key) => {
+        {conversations.length === 0 && (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={isNoneSelected ? '当前未勾选任何号，会话列表为空' : '暂无会话，等待玩家上门'}
+            style={{ padding: '48px 0' }}
+          />
+        )}
+        {conversations.length > 0 && groupOrder.map((key) => {
           const list = grouped[key]
           const isCollapsed = collapsed[key]
           return (
@@ -157,6 +171,7 @@ function ConversationList({
                     <ConversationCard
                       key={c.id}
                       conversation={c}
+                      currentAgentId={currentAgentId}
                       selected={c.id === selectedId}
                       onClick={() => onSelect(c.id)}
                     />
@@ -202,10 +217,12 @@ function ConversationList({
 
 function ConversationCard({
   conversation,
+  currentAgentId,
   selected,
   onClick,
 }: {
   conversation: Conversation
+  currentAgentId: string
   selected: boolean
   onClick: () => void
 }) {
@@ -214,7 +231,13 @@ function ConversationCard({
   const relationRemark = getRelation(conversation.playerId, conversation.accountId)?.remark?.trim()
   const displayName = relationRemark || player?.nickname || '未知玩家'
   const time = conversation.lastMessageAt ? formatTime(conversation.lastMessageAt) : ''
-  const hasMeta = conversation.pinned || conversation.tags.includes('important')
+  const tag = conversation.tag ? tagMeta[conversation.tag] : null
+  const hasMeta = conversation.pinned || !!tag
+  // 未读徽章仅在 排队中 或 本人负责(会话中本人)展示;他人接待中 / 已结束不承载未读(PRD R-105-05)
+  const showUnread =
+    conversation.unreadCount > 0 &&
+    (conversation.status === 'queueing'
+      || (conversation.status === 'active' && conversation.assigneeId === currentAgentId))
 
   // 会话卡片不再提供右键菜单;置顶 / 标记走中列标题栏操作条
   return (
@@ -233,15 +256,15 @@ function ConversationCard({
         </div>
         <div className="cf-conv-card__row">
           <span className="cf-conv-card__preview">{conversation.lastMessagePreview}</span>
-          <Badge count={conversation.unreadCount} size="small" />
+          {showUnread && <Badge count={conversation.unreadCount} size="small" />}
         </div>
         {hasMeta && (
           <div className="cf-conv-card__meta">
             {conversation.pinned && (
               <PushpinFilled style={{ color: '#FAAD14', fontSize: 12 }} />
             )}
-            {conversation.tags.includes('important') && (
-              <StarFilled style={{ color: '#FF4D4F', fontSize: 12 }} />
+            {tag && (
+              <Tooltip title={tag.label}>{tag.icon}</Tooltip>
             )}
           </div>
         )}

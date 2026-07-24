@@ -20,6 +20,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { MessageInstance } from 'antd/es/message/interface'
+import type { WechatAccountStatus } from '../../types/chat'
 import { useEffect, useMemo, useState } from 'react'
 import {
   getAccountsForGame,
@@ -735,9 +736,10 @@ function roleColor(roleId: PermissionRoleId) {
   return 'green'
 }
 
-function wechatStatusLabel(status: 'online' | 'offline' | 'banned') {
+function wechatStatusLabel(status: WechatAccountStatus) {
   if (status === 'online') return '在线'
   if (status === 'banned') return '封禁'
+  if (status === 'disabled') return '停用'
   return '离线'
 }
 

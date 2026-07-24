@@ -2,7 +2,7 @@
  * 主动发起会话的本地持久化(mock demo)—— chat-workbench 与 player-center 共享单一来源。
  *
  * chatflowMock 的会话/消息是模块级 seed,刷新即重置。玩家中心"主动发起"创建的会话
- * 已成功落库的主动会话与待发队列需要跨刷新恢复；纯空白占位和失败草稿不持久化。
+ * 只有首条消息成功送达才落库并跨刷新恢复(PRD P-120-12);首条失败 / 未发送不落库、刷新即清除。
  *
  * player-center「反查会话存档」应见到工作台同款会话集合(seed + 已落库主动发起),
  * 因此读取逻辑抽到本模块,两域共用,避免会话数据对不上。
@@ -80,13 +80,13 @@ export function saveProactivePersisted(conversations: Conversation[], messages: 
       (c) =>
         !SEED_CONV_IDS.has(c.id) &&
         messages.some(
-          (m) =>
-            m.conversationId === c.id && m.direction === 'outgoing' && (m.status === 'sent' || m.status === 'queued'),
+          (m) => m.conversationId === c.id && m.direction === 'outgoing' && m.status === 'sent',
         ),
     )
     const ids = new Set(persistedConvs.map((c) => c.id))
+    // 仅落库已成功落地会话内的非发送中消息;发送中不持久化(刷新按结果重判)。
     const persistedMsgs = messages.filter(
-      (m) => (ids.has(m.conversationId) || m.status === 'queued') && m.status !== 'sending',
+      (m) => ids.has(m.conversationId) && m.status !== 'sending',
     )
     localStorage.setItem(
       PROACTIVE_STORAGE_KEY,

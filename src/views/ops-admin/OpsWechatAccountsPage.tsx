@@ -21,6 +21,7 @@ import '../../styles/OpsAdmin.scss'
 const onlineMeta: Record<WechatAccountStatus, { label: string; color: string }> = {
   online: { label: '在线', color: 'green' },
   offline: { label: '离线', color: 'default' },
+  disabled: { label: '停用', color: 'default' },
   banned: { label: '封禁中', color: 'red' },
 }
 

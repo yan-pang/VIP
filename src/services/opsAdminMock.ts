@@ -136,7 +136,9 @@ export interface OpsActor {
 
 export type OutboundDeliveryAssessment =
   | { disposition: 'ready' }
-  | { disposition: 'queued'; code: string; message: string }
+  // 临时执行依赖不可用(云电脑 / 机器人不可用等):PRD 无「待发送」,直接置失败,由客服手动重发。
+  | { disposition: 'failed'; code: string; message: string }
+  // 账号级 / 全局硬限制:禁止发送,前端拦截。
   | { disposition: 'blocked'; code: string; message: string }
 
 export interface OpsAuditRecord {
@@ -520,7 +522,7 @@ export function assessOutboundDelivery(accountId: string): OutboundDeliveryAsses
   const account = wechatAccounts.find((item) => item.id === accountId)
   if (!account) return { disposition: 'blocked', code: 'ACCOUNT_NOT_FOUND', message: '企微号不存在' }
   if (!account.enabled) return { disposition: 'blocked', code: 'ACCOUNT_DISABLED', message: '企微号接入已禁用' }
-  if (account.status === 'banned') return { disposition: 'blocked', code: 'ACCOUNT_BANNED', message: '企微号已封禁' }
+  if (account.status === 'banned') return { disposition: 'blocked', code: 'ACCOUNT_BANNED', message: '企微号已被封禁，暂时无法发送消息' }
   const config = getConfig(accountId)
   const resource = getResource(config.resourceId)
   if (!resource) return { disposition: 'blocked', code: 'RESOURCE_MISSING', message: '企微号未绑定云电脑与 RPA 资源' }
@@ -528,26 +530,28 @@ export function assessOutboundDelivery(accountId: string): OutboundDeliveryAsses
     return { disposition: 'blocked', code: 'IP_UNVERIFIED', message: '出口 IP 尚未完成校验' }
   }
   if (hasPublicIpDrift(resource, config.expectedPublicIp)) {
-    return { disposition: 'blocked', code: 'IP_MISMATCH', message: '当前出口 IP 与阿里云分配的合规基线不一致' }
+    return { disposition: 'blocked', code: 'IP_MISMATCH', message: '网络环境异常，消息暂时无法发送' }
   }
   if (config.riskStatus === 'frequency_limited') {
-    return { disposition: 'blocked', code: 'FREQUENCY_LIMITED', message: '该企微号已被发送频率或连续失败策略限制' }
+    return { disposition: 'blocked', code: 'FREQUENCY_LIMITED', message: '当前企微号发送已达上限，请稍后再试' }
   }
   const policy = riskPolicies.find((item) => item.accountId === accountId)
   const telemetry = getTelemetry(accountId)
   const cutoff = Date.now() - 60 * 60 * 1000
   telemetry.sentAt = telemetry.sentAt.filter((value) => new Date(value).getTime() >= cutoff)
   if (policy && telemetry.sentAt.length >= policy.hourlySendLimit) {
-    return { disposition: 'blocked', code: 'HOURLY_LIMIT', message: `已达到每小时 ${policy.hourlySendLimit} 条发送上限` }
+    return { disposition: 'blocked', code: 'HOURLY_LIMIT', message: '当前企微号发送已达上限，请稍后再试' }
+  }
+  // 停用 / 离线 = 账号级硬限制,禁止发送(PRD P-103)。
+  if (account.status === 'disabled') {
+    return { disposition: 'blocked', code: 'ACCOUNT_SUSPENDED', message: '企微号已停用，暂时无法发送消息' }
   }
   if (account.status !== 'online') {
-    return { disposition: 'queued', code: 'ACCOUNT_OFFLINE', message: '企微号离线，消息已进入待发队列' }
+    return { disposition: 'blocked', code: 'ACCOUNT_OFFLINE', message: '企微号已离线，暂时无法发送消息' }
   }
-  if (resource.desktopStatus !== 'connected') {
-    return { disposition: 'queued', code: 'DESKTOP_UNAVAILABLE', message: '云电脑暂不可用，消息已进入待发队列' }
-  }
-  if (resource.rpaStatus !== 'running') {
-    return { disposition: 'queued', code: 'RPA_UNAVAILABLE', message: 'RPA 暂不可用，消息已进入待发队列' }
+  // 云电脑 / 机器人等临时执行依赖不可用:PRD 无待发送队列,直接失败由客服手动重发。
+  if (resource.desktopStatus !== 'connected' || resource.rpaStatus !== 'running') {
+    return { disposition: 'failed', code: 'DEPENDENCY_UNAVAILABLE', message: '发送失败：执行环境暂不可用，恢复后请重新发送' }
   }
   return { disposition: 'ready' }
 }

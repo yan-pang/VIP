@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { conversations, findAccount, wechatAccounts } from './chatflowMock'
+import { conversations, findAccount, simulateReconciliation, wechatAccounts } from './chatflowMock'
 import {
   assessOutboundDelivery,
   getCloudRpaResourceForAccount,
@@ -38,10 +38,30 @@ describe('跨域安全与一致性契约', () => {
     expect(session.manageableGameIds).toEqual(expect.arrayContaining(['20173', '20174', '20175']))
   })
 
-  it('发送前同时区分可执行、暂时排队和硬性阻断', () => {
+  it('发送前区分可执行与硬性阻断，且不再产出「待发送」排队态', () => {
     expect(assessOutboundDelivery('wx_xiaoqin')).toEqual({ disposition: 'ready' })
     expect(assessOutboundDelivery('wx_xiaobei')).toMatchObject({ disposition: 'blocked', code: 'IP_MISMATCH' })
     expect(assessOutboundDelivery('wx_xiaojuan')).toMatchObject({ disposition: 'blocked', code: 'ACCOUNT_BANNED' })
+    // PRD 移除「待发送」:任何企微号的发送前评估都不再返回 queued(临时依赖不可用改为直接 failed)。
+    wechatAccounts.forEach((account) => {
+      expect(assessOutboundDelivery(account.id).disposition).not.toBe('queued')
+    })
+  })
+
+  it('回捞比对核实只会把消息修正为「回捞比对失败」分类', () => {
+    for (let i = 0; i < 300; i++) {
+      const result = simulateReconciliation()
+      if (result.failed) {
+        expect(result.failure.category).toBe('delivery_reconciliation_failed')
+      }
+    }
+  })
+
+  it('会话标记为个人单选三值(单值字段,非数组)', () => {
+    conversations.forEach((conversation) => {
+      expect(Array.isArray((conversation as { tags?: unknown }).tags)).toBe(false)
+      expect(['follow_up', 'important', 'callback', null]).toContain(conversation.tag ?? null)
+    })
   })
 
   it('运营服务拒绝无权角色，即使调用方绕过页面按钮', () => {

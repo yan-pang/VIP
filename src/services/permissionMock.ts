@@ -298,6 +298,7 @@ export function getAccountsForGame(gameId: string) {
 }
 
 export function getAssignableAgents(accountId: string) {
+  // PRD 候选资格 = 启用(active) + 同游戏 + 同号授权;不看登录在线态(V1 无客服在线状态机)。
   return records
     .filter(
       (record) =>
@@ -305,7 +306,7 @@ export function getAssignableAgents(accountId: string) {
         normalizeAccountIds(record.gameIds, record.accountIds).includes(accountId),
     )
     .map((record) => agents.find((agent) => agent.id === record.id))
-    .filter((agent): agent is NonNullable<typeof agent> => !!agent && agent.online)
+    .filter((agent): agent is NonNullable<typeof agent> => !!agent)
 }
 
 function assertCanManage() {
